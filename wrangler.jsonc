@@ -3,16 +3,22 @@
   "name": "expiry-email-reminders",
   "main": "./worker.ts",
   "compatibility_date": "2026-09-21",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "expiry-email-reminders"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "EXPIRY_REMINDERS_DB",
       "database_name": "expiry-email-reminders",
-      "database_id": "replace-with-your-d1-database-id",
+      "database_id": "2fb8de37-04ce-474f-b9eb-57e78b753449",
       "migrations_dir": "migrations"
     }
   ],

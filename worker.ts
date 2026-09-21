@@ -1,5 +1,4 @@
 import type { AppEnv } from "./lib/cloudflare";
-import { runReminderJob } from "./lib/reminder-job";
 
 // .open-next/worker.js is created by `opennextjs-cloudflare build`.
 // @ts-expect-error Generated file is intentionally absent before the first Cloudflare build.
@@ -9,7 +8,8 @@ export default {
   fetch: handler.fetch,
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(
-      runReminderJob(env as AppEnv)
+      import("./lib/reminder-job")
+        .then(({ runReminderJob }) => runReminderJob(env as AppEnv))
         .then((result) => console.info("Expiration reminder job completed.", result))
         .catch((error) => console.error("Expiration reminder job failed.", error)),
     );

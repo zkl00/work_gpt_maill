@@ -5,7 +5,6 @@ import path from "node:path";
 void initOpenNextCloudflareForDev();
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@typesafe-ai/sdk"],
   outputFileTracingRoot: path.join(__dirname),
 };
 

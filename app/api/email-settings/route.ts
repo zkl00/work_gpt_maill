@@ -3,7 +3,15 @@ import { getAppEnv } from "@/lib/cloudflare";
 import { getEmailConfigStatus, saveEmailConfig } from "@/lib/email-config";
 
 export async function GET() {
-  return NextResponse.json(await getEmailConfigStatus(await getAppEnv()));
+  try {
+    return NextResponse.json(await getEmailConfigStatus(await getAppEnv()));
+  } catch (error) {
+    console.error("Unable to load email settings.", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "加载邮件配置失败。" },
+      { status: 500 },
+    );
+  }
 }
 
 export async function PUT(request: Request) {

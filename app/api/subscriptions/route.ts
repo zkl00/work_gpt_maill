@@ -17,9 +17,17 @@ function toView(
 }
 
 export async function GET() {
-  const env = await getAppEnv();
-  const subscriptions = await listSubscriptions(env.EXPIRY_REMINDERS_DB);
-  return NextResponse.json(subscriptions.map((subscription) => toView(subscription, env.APP_TIME_ZONE)));
+  try {
+    const env = await getAppEnv();
+    const subscriptions = await listSubscriptions(env.EXPIRY_REMINDERS_DB);
+    return NextResponse.json(subscriptions.map((subscription) => toView(subscription, env.APP_TIME_ZONE)));
+  } catch (error) {
+    console.error("Unable to load subscriptions.", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "加载账号失败。" },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
