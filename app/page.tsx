@@ -4,25 +4,17 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { AccountStatus, ChatGptPlan, ReminderState, SubscriptionInput, SubscriptionView } from "@/lib/types";
 
 type FormValues = SubscriptionInput;
-type EmailProvider = "resend" | "smtp";
-type SmtpService = "qq" | "163" | "gmail" | "custom";
 
 type EmailConfigStatus = {
   configured: boolean;
   from: string | null;
-  provider: EmailProvider | null;
+  provider: "resend" | null;
   storageReady: boolean;
 };
 
 type ImportPreview = {
   rows: SubscriptionInput[];
   errors: Array<{ line: number; message: string }>;
-};
-
-const smtpPresets: Record<Exclude<SmtpService, "custom">, { host: string; port: number; secure: boolean }> = {
-  qq: { host: "smtp.qq.com", port: 465, secure: true },
-  "163": { host: "smtp.163.com", port: 465, secure: true },
-  gmail: { host: "smtp.gmail.com", port: 587, secure: false },
 };
 
 const serviceTypeNames: Record<string, string> = { chatgpt: "ChatGPT", apple: "Apple", anzhuo: "安卓", other: "其他" };
@@ -103,15 +95,8 @@ export default function Home() {
     provider: null,
     storageReady: false,
   });
-  const [emailProvider, setEmailProvider] = useState<EmailProvider>("smtp");
   const [emailApiKey, setEmailApiKey] = useState("");
   const [emailFrom, setEmailFrom] = useState("");
-  const [smtpService, setSmtpService] = useState<SmtpService>("qq");
-  const [smtpHost, setSmtpHost] = useState(smtpPresets.qq.host);
-  const [smtpPort, setSmtpPort] = useState(smtpPresets.qq.port);
-  const [smtpSecure, setSmtpSecure] = useState(smtpPresets.qq.secure);
-  const [smtpUsername, setSmtpUsername] = useState("");
-  const [smtpPassword, setSmtpPassword] = useState("");
   const [savingEmailConfig, setSavingEmailConfig] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importFileName, setImportFileName] = useState<string | null>(null);
@@ -144,7 +129,6 @@ export default function Home() {
       const config = (await response.json()) as EmailConfigStatus;
       setEmailConfig(config);
       setEmailFrom(config.from || "");
-      if (config.provider) setEmailProvider(config.provider);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "邮件配置加载失败。" );
     }
@@ -387,41 +371,18 @@ export default function Home() {
       const response = await fetch("/api/email-settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          emailProvider === "resend"
-            ? { provider: "resend", apiKey: emailApiKey, from: emailFrom }
-            : {
-                provider: "smtp",
-                from: emailFrom,
-                host: smtpHost,
-                port: smtpPort,
-                secure: smtpSecure,
-                username: smtpUsername,
-                password: smtpPassword,
-              },
-        ),
+        body: JSON.stringify({ provider: "resend", apiKey: emailApiKey, from: emailFrom }),
       });
       if (!response.ok) throw new Error(await readApiError(response));
       const saved = (await response.json()) as EmailConfigStatus;
       setEmailConfig(saved);
       setEmailFrom(saved.from || "");
       setEmailApiKey("");
-      setSmtpPassword("");
       setNotice("邮件发送配置已加密保存。现在可使用“立即测试”发送一封真实邮件。");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "邮件配置保存失败。" );
     } finally {
       setSavingEmailConfig(false);
-    }
-  }
-
-  function chooseSmtpService(service: SmtpService) {
-    setSmtpService(service);
-    if (service !== "custom") {
-      const preset = smtpPresets[service];
-      setSmtpHost(preset.host);
-      setSmtpPort(preset.port);
-      setSmtpSecure(preset.secure);
     }
   }
 
@@ -464,23 +425,14 @@ export default function Home() {
         <div className="section-heading">
           <div>
             <h2>邮件发送设置</h2>
-            <p>{emailConfig.configured ? `已配置 ${emailConfig.provider === "smtp" ? "SMTP" : "Resend"} 发件人：${emailConfig.from}` : "选择 SMTP 后可用 QQ、163 或 Gmail 作为发件邮箱。"}</p>
+            <p>{emailConfig.configured ? `已配置 Resend 发件人：${emailConfig.from}` : "Cloudflare 版本使用 Resend API 发送邮件；QQ、163、Gmail 都可以作为接收邮箱。"}</p>
           </div>
           <span className={`badge ${emailConfig.configured ? "sent" : "disabled"}`}>{emailConfig.configured ? "已配置" : "未配置"}</span>
         </div>
         <form className="email-config-form" onSubmit={saveEmailSettings}>
-          <label>发件方式<select value={emailProvider} onChange={(event) => setEmailProvider(event.target.value as EmailProvider)}><option value="smtp">QQ / 163 / Gmail（SMTP）</option><option value="resend">Resend API</option></select></label>
-          {emailProvider === "resend" && <label>Resend API Key<input required type="password" autoComplete="new-password" value={emailApiKey} onChange={(event) => setEmailApiKey(event.target.value)} placeholder="re_xxxxxxxxx" /></label>}
-          {emailProvider === "smtp" && <>
-            <label>邮箱服务<select value={smtpService} onChange={(event) => chooseSmtpService(event.target.value as SmtpService)}><option value="qq">QQ 邮箱</option><option value="163">163 邮箱</option><option value="gmail">Gmail</option><option value="custom">其他 SMTP</option></select></label>
-            <label>SMTP 服务器<input required value={smtpHost} onChange={(event) => { setSmtpService("custom"); setSmtpHost(event.target.value); }} placeholder="smtp.qq.com" /></label>
-            <label>端口<input required type="number" min="1" max="65535" value={smtpPort} onChange={(event) => setSmtpPort(Number(event.target.value))} /></label>
-            <label className="secure-control"><input type="checkbox" checked={smtpSecure} onChange={(event) => setSmtpSecure(event.target.checked)} /> 使用 SSL/TLS（465 端口通常开启；Gmail 587 关闭）</label>
-            <label>SMTP 登录邮箱<input required type="email" value={smtpUsername} onChange={(event) => setSmtpUsername(event.target.value)} placeholder="your-email@example.com" /></label>
-            <label>授权码 / 应用专用密码<input required type="password" autoComplete="new-password" value={smtpPassword} onChange={(event) => setSmtpPassword(event.target.value)} placeholder="不是网页登录密码" /></label>
-          </>}
+          <label>Resend API Key<input required type="password" autoComplete="new-password" value={emailApiKey} onChange={(event) => setEmailApiKey(event.target.value)} placeholder="re_xxxxxxxxx" /></label>
           <label>发件人<input required value={emailFrom} onChange={(event) => setEmailFrom(event.target.value)} placeholder="到期提醒 <reminders@your-domain.com>" /></label>
-          <div className="email-config-action"><button className="button primary" disabled={!emailConfig.storageReady || savingEmailConfig}>{savingEmailConfig ? "保存中…" : "加密保存邮件配置"}</button><span>{emailConfig.storageReady ? "授权码不会回显或返回到浏览器。" : "请先在服务器设置 EMAIL_CONFIG_ENCRYPTION_KEY。"}</span></div>
+          <div className="email-config-action"><button className="button primary" disabled={!emailConfig.storageReady || savingEmailConfig}>{savingEmailConfig ? "保存中…" : "加密保存邮件配置"}</button><span>{emailConfig.storageReady ? "密钥会在 D1 中加密保存，且不会回显或返回到浏览器。" : "请先设置 Cloudflare Secret：EMAIL_CONFIG_ENCRYPTION_KEY。"}</span></div>
         </form>
       </section>
 
@@ -552,7 +504,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer>定时任务每天 09:00（Asia/Shanghai）检查一次。页面保存 SMTP 配置前，请在服务器设置 <code>CRON_SECRET</code> 和 <code>EMAIL_CONFIG_ENCRYPTION_KEY</code>。</footer>
+      <footer>Cloudflare Cron 每天 09:00（Asia/Shanghai）检查一次。页面保存 Resend 配置前，请在 Cloudflare 设置 <code>EMAIL_CONFIG_ENCRYPTION_KEY</code>。</footer>
     </main>
   );
 }

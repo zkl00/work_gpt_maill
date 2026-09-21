@@ -15,7 +15,7 @@ export function addDays(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-export function dateInTimezone(timeZone = process.env.APP_TIME_ZONE || "Asia/Shanghai"): string {
+export function dateInTimezone(timeZone = "Asia/Shanghai"): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -38,16 +38,25 @@ export function hasAutomaticReminderForCurrentExpiry(subscription: Subscription)
   );
 }
 
-export function getReminderState(subscription: Subscription, today = dateInTimezone()): ReminderState {
+export function getReminderState(
+  subscription: Subscription,
+  today?: string,
+  timeZone?: string,
+): ReminderState {
+  const currentDate = today || dateInTimezone(timeZone);
   if (subscription.cancelled) return "cancelled";
   if (!subscription.reminderRule.enabled) return "disabled";
-  if (subscription.expiresOn < today) return "expired";
+  if (subscription.expiresOn < currentDate) return "expired";
   if (hasAutomaticReminderForCurrentExpiry(subscription)) return "sent";
 
   const reminderDate = getReminderDate(subscription);
-  return reminderDate !== null && reminderDate <= today ? "due" : "scheduled";
+  return reminderDate !== null && reminderDate <= currentDate ? "due" : "scheduled";
 }
 
-export function shouldSendAutomaticReminder(subscription: Subscription, today = dateInTimezone()): boolean {
-  return getReminderState(subscription, today) === "due";
+export function shouldSendAutomaticReminder(
+  subscription: Subscription,
+  today?: string,
+  timeZone?: string,
+): boolean {
+  return getReminderState(subscription, today, timeZone) === "due";
 }

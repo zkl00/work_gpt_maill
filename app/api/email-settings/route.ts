@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
+import { getAppEnv } from "@/lib/cloudflare";
 import { getEmailConfigStatus, saveEmailConfig } from "@/lib/email-config";
 
-export const runtime = "nodejs";
-
 export async function GET() {
-  return NextResponse.json(await getEmailConfigStatus());
+  return NextResponse.json(await getEmailConfigStatus(await getAppEnv()));
 }
 
 export async function PUT(request: Request) {
   try {
+    const env = await getAppEnv();
     const input = (await request.json()) as Record<string, unknown>;
-    const status = await saveEmailConfig(input);
+    const status = await saveEmailConfig(env, input);
     return NextResponse.json(status);
   } catch (error) {
     return NextResponse.json(

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
+import { getAppEnv } from "@/lib/cloudflare";
 import { parseSubscriptionWorkbook } from "@/lib/import-subscriptions";
 import { resolveFallbackReminderRule } from "@/lib/reminder-rule";
 import { createSubscriptions, listSubscriptions, validateSubscriptionInput } from "@/lib/subscription-store";
 import type { SubscriptionInput } from "@/lib/types";
-
-export const runtime = "nodejs";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 500;
@@ -15,12 +14,13 @@ function duplicateKey(input: SubscriptionInput): string {
 
 export async function POST(request: Request) {
   try {
+    const env = await getAppEnv();
     if (request.headers.get("content-type")?.includes("application/json")) {
       const body = (await request.json()) as { rows?: SubscriptionInput[] };
       const rows = Array.isArray(body.rows) ? body.rows : [];
       if (!rows.length) throw new Error("没有可导入的记录。 ");
       if (rows.length > MAX_ROWS) throw new Error(`单次最多导入 ${MAX_ROWS} 条记录。`);
-      const created = await createSubscriptions(rows.map((input) => ({
+      const created = await createSubscriptions(env.EXPIRY_REMINDERS_DB, rows.map((input) => ({
         input: validateSubscriptionInput(input),
         reminderRule: resolveFallbackReminderRule(input.notes || "", input.reminderDays ?? 3),
       })));
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const preview = parseSubscriptionWorkbook(await file.arrayBuffer());
     if (preview.candidates.length > MAX_ROWS) throw new Error(`单次最多导入 ${MAX_ROWS} 条记录。`);
 
-    const existing = new Set((await listSubscriptions()).map(duplicateKey));
+    const existing = new Set((await listSubscriptions(env.EXPIRY_REMINDERS_DB)).map(duplicateKey));
     const batch = new Set<string>();
     const candidates = preview.candidates.filter((candidate) => {
       const key = duplicateKey(candidate.input);

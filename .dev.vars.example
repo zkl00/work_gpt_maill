@@ -1,0 +1,6 @@
+# Local Cloudflare Workers development settings. Copy to .dev.vars; never commit it.
+EMAIL_CONFIG_ENCRYPTION_KEY=replace-with-a-long-random-value
+# Optional: set these here to use a Resend configuration without saving it in the web UI.
+# RESEND_API_KEY=re_xxxxxxxxx
+# EMAIL_FROM="到期提醒 <reminders@your-domain.com>"
+# TYPESAFE_API_KEY=ts_xxxxxxxxx

@@ -31,12 +31,13 @@ export function resolveFallbackReminderRule(notes: string, fallbackDays: number)
 export async function resolveReminderRule(
   notes: string,
   fallbackDays: number,
+  typeSafeApiKey?: string,
 ): Promise<ReminderRule> {
   const baseline = resolveFallbackReminderRule(notes, fallbackDays);
-  if (!notes.trim() || !process.env.TYPESAFE_API_KEY) return baseline;
+  if (!notes.trim() || !typeSafeApiKey) return baseline;
 
   try {
-    const client = new TypeSafeClient();
+    const client = new TypeSafeClient({ apiKey: typeSafeApiKey });
     const response = await client.systemOne({
       state: {
         notes,

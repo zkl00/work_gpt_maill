@@ -1,7 +1,7 @@
-import type { Subscription } from "@/lib/types";
-import { dateInTimezone } from "@/lib/reminder";
-import { getEmailCredentials } from "@/lib/email-config";
-import nodemailer from "nodemailer";
+import type { AppEnv } from "./cloudflare";
+import { getEmailCredentials } from "./email-config";
+import { dateInTimezone } from "./reminder";
+import type { Subscription } from "./types";
 
 const serviceTypeNames: Record<string, string> = {
   chatgpt: "ChatGPT",
@@ -28,11 +28,10 @@ function escapeHtml(value: string): string {
   })[character] ?? character);
 }
 
-function message(subscription: Subscription): { subject: string; html: string; text: string } {
-  const today = dateInTimezone();
+function message(subscription: Subscription, timeZone: string | undefined): { subject: string; html: string; text: string } {
+  const today = dateInTimezone(timeZone);
   const remainingDays = Math.round(
-    (Date.parse(`${subscription.expiresOn}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) /
-      86_400_000,
+    (Date.parse(`${subscription.expiresOn}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000,
   );
   const deadline = remainingDays === 0
     ? "今天"
@@ -51,39 +50,27 @@ function message(subscription: Subscription): { subject: string; html: string; t
   return { subject, text, html };
 }
 
-export async function sendExpirationReminder(subscription: Subscription): Promise<void> {
-  const payload = message(subscription);
-  if (process.env.EMAIL_DELIVERY_MODE === "console") {
+export async function sendExpirationReminder(subscription: Subscription, env: AppEnv): Promise<void> {
+  const payload = message(subscription, env.APP_TIME_ZONE);
+  if (env.EMAIL_DELIVERY_MODE === "console") {
     console.info("[email preview]", { to: subscription.notificationEmail, ...payload });
     return;
   }
 
-  const credentials = await getEmailCredentials();
+  const credentials = await getEmailCredentials(env);
   if (!credentials) {
-    throw new Error("邮件未配置：请先在“邮件发送设置”中保存 Resend 或 SMTP 发件配置。\n");
+    throw new Error("邮件未配置：请先在“邮件发送设置”中保存 Resend 发件配置。");
   }
-
-  if (credentials.provider === "resend") {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${credentials.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from: credentials.from, to: [subscription.notificationEmail], ...payload }),
-    });
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`邮件服务拒绝发送（${response.status}）：${detail}`);
-    }
-    return;
-  }
-
-  const transport = nodemailer.createTransport({
-    host: credentials.host,
-    port: credentials.port,
-    secure: credentials.secure,
-    auth: { user: credentials.username, pass: credentials.password },
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${credentials.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from: credentials.from, to: [subscription.notificationEmail], ...payload }),
   });
-  await transport.sendMail({ from: credentials.from, to: subscription.notificationEmail, ...payload });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`邮件服务拒绝发送（${response.status}）：${detail}`);
+  }
 }

@@ -7,22 +7,29 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.generated.d.ts",
+    "db:migrate:local": "wrangler d1 migrations apply expiry-email-reminders --local",
+    "db:migrate:remote": "wrangler d1 migrations apply expiry-email-reminders --remote",
+    "export:legacy-data": "node scripts/export-legacy-subscriptions.mjs"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.20.6",
     "@typesafe-ai/sdk": "^0.6.0",
-    "next": "^15.4.1",
-    "nodemailer": "^6.10.1",
+    "next": "^15.5.25",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260921.1",
     "@types/node": "^22.15.3",
-    "@types/nodemailer": "^6.4.17",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "typescript": "^5.8.3",
-    "vitest": "^3.1.4"
+    "vitest": "^3.1.4",
+    "wrangler": "^4.135.0"
   }
 }

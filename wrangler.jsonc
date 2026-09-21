@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "expiry-email-reminders",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-09-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "EXPIRY_REMINDERS_DB",
+      "database_name": "expiry-email-reminders",
+      "database_id": "replace-with-your-d1-database-id",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 1 * * *"]
+  },
+  "vars": {
+    "APP_TIME_ZONE": "Asia/Shanghai"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

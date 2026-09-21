@@ -1,12 +1,12 @@
 import { exportSubscriptionsWorkbook } from "@/lib/export-subscriptions";
+import { getAppEnv } from "@/lib/cloudflare";
 import { dateInTimezone } from "@/lib/reminder";
 import { listSubscriptions } from "@/lib/subscription-store";
 
-export const runtime = "nodejs";
-
 export async function GET() {
-  const workbook = exportSubscriptionsWorkbook(await listSubscriptions());
-  const filename = encodeURIComponent(`账号到期提醒-${dateInTimezone()}.xlsx`);
+  const env = await getAppEnv();
+  const workbook = exportSubscriptionsWorkbook(await listSubscriptions(env.EXPIRY_REMINDERS_DB));
+  const filename = encodeURIComponent(`账号到期提醒-${dateInTimezone(env.APP_TIME_ZONE)}.xlsx`);
   return new Response(new Uint8Array(workbook).buffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
