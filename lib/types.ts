@@ -49,7 +49,10 @@ export type ReminderState =
   | "sent"
   | "expired";
 
+export type ExpiryState = "imminent" | "normal";
+
 export type SubscriptionView = Subscription & {
   reminderState: ReminderState;
+  expiryState: ExpiryState;
   nextSendOn: string | null;
 };

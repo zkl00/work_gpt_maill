@@ -36,6 +36,13 @@ const stateText: Record<ReminderState, string> = {
   expired: "已到期",
 };
 
+function sortRowsForAttention(items: SubscriptionView[]): SubscriptionView[] {
+  return [...items].sort((first, second) => {
+    const priority = Number(second.expiryState === "imminent") - Number(first.expiryState === "imminent");
+    return priority || first.expiresOn.localeCompare(second.expiresOn) || first.accountEmail.localeCompare(second.accountEmail);
+  });
+}
+
 const today = new Date().toISOString().slice(0, 10);
 
 function initialForm(): FormValues {
@@ -114,7 +121,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/subscriptions", { cache: "no-store" });
       if (!response.ok) throw new Error(await readApiError(response));
-      setRows((await response.json()) as SubscriptionView[]);
+      setRows(sortRowsForAttention((await response.json()) as SubscriptionView[]));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "加载失败。" );
     } finally {
@@ -188,7 +195,7 @@ export default function Home() {
       const saved = (await response.json()) as SubscriptionView;
       setRows((current) => {
         const retained = current.filter((item) => item.id !== saved.id);
-        return [...retained, saved].sort((a, b) => a.expiresOn.localeCompare(b.expiresOn));
+        return sortRowsForAttention([...retained, saved]);
       });
       setNotice(editingId ? "账号已更新，提醒日期已重新计算。" : "账号已保存，系统会按到期日自动处理。" );
       setEditingId(null);
@@ -234,7 +241,7 @@ export default function Home() {
       });
       if (!response.ok) throw new Error(await readApiError(response));
       const restored = (await response.json()) as SubscriptionView;
-      setRows((current) => current.map((item) => item.id === restored.id ? restored : item));
+      setRows((current) => sortRowsForAttention(current.map((item) => item.id === restored.id ? restored : item)));
       setNotice("已恢复正常订阅，现在可以发送测试邮件。 ");
     } catch (restoreError) {
       setError(restoreError instanceof Error ? restoreError.message : "恢复提醒失败。" );
@@ -440,7 +447,7 @@ export default function Home() {
         <div className="section-heading">
           <div>
             <h2>{editingId ? "编辑账号" : "添加账号"}</h2>
-            <p>“接收邮箱”是实际收提醒的人；不填写不会保存。</p>
+            <p>“接收邮箱”是实际收提醒的人；支持多个邮箱，用逗号、分号或换行分隔。</p>
           </div>
           {editingId && (
             <button className="button ghost" type="button" onClick={() => { setEditingId(null); setForm(initialForm()); }}>
@@ -452,7 +459,7 @@ export default function Home() {
         <form onSubmit={submit} className="form-grid">
           <label>美区账号邮箱<input required type="email" value={form.ownerEmail} onChange={(event) => change("ownerEmail", event.target.value)} placeholder="owner@example.com" /></label>
           <label>账号邮箱<input required type="email" value={form.accountEmail} onChange={(event) => change("accountEmail", event.target.value)} placeholder="account@example.com" /></label>
-          <label>接收邮箱<input required type="email" value={form.notificationEmail} onChange={(event) => change("notificationEmail", event.target.value)} placeholder="notify@example.com" /></label>
+          <label>接收邮箱（可多个）<input required type="text" value={form.notificationEmail} onChange={(event) => change("notificationEmail", event.target.value)} placeholder="a@example.com, b@example.com" /></label>
           <label>类型<select required value={form.serviceType} onChange={(event) => changeServiceType(event.target.value)}><option value="" disabled>请选择类型</option><option value="chatgpt">ChatGPT</option><option value="apple">Apple</option><option value="anzhuo">安卓</option><option value="other">其他</option></select></label>
           {form.serviceType === "chatgpt" && <label>ChatGPT 套餐<select required value={form.chatGptPlan || ""} onChange={(event) => change("chatGptPlan", event.target.value as ChatGptPlan)}><option value="" disabled>请选择套餐</option><option value="plus">Plus</option><option value="pro10">Pro 10</option><option value="pro20">Pro 20</option></select></label>}
           <label>开通时间<input required type="date" value={form.activatedOn} onChange={(event) => change("activatedOn", event.target.value)} /></label>
@@ -474,7 +481,7 @@ export default function Home() {
           <input ref={importFileInput} className="visually-hidden" type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={(event) => { const file = event.target.files?.[0]; if (file) void previewImport(file); }} />
           <button className="button ghost" type="button" disabled={previewingImport || committingImport} onClick={() => importFileInput.current?.click()}>{previewingImport ? "读取中…" : "选择导入文件"}</button>
         </div>
-        <p className="import-help">必填表头：美区账号、账号、类型、开通时间、到期时间。可选：套餐、接收邮箱、提前提醒天数、是否取消订阅、状态、备注。未填“接收邮箱”时，会使用“美区账号”邮箱接收提醒。</p>
+        <p className="import-help">必填表头：美区账号、账号、类型、开通时间、到期时间。可选：套餐、接收邮箱、提前提醒天数、是否取消订阅、状态、备注。“接收邮箱”可填写多个邮箱（逗号、分号或换行分隔）；未填时会使用“美区账号”邮箱接收提醒。</p>
         {importPreview && <div className="import-preview"><div><strong>{importFileName}</strong><span> 可导入 {importPreview.rows.length} 条；跳过/错误 {importPreview.errors.length} 条。</span></div>{importPreview.errors.length > 0 && <ul>{importPreview.errors.map((item, index) => <li key={`${item.line}-${index}`}>第 {item.line} 行：{item.message}</li>)}</ul>}<div className="import-actions"><button className="button primary" type="button" disabled={!importPreview.rows.length || committingImport} onClick={() => void confirmImport()}>{committingImport ? "导入中…" : `确认导入 ${importPreview.rows.length} 条`}</button><button className="button ghost" type="button" disabled={committingImport} onClick={() => { setImportPreview(null); setImportFileName(null); }}>取消</button></div></div>}
       </section>
 
@@ -482,18 +489,18 @@ export default function Home() {
 
       <section className="panel table-panel">
         <div className="section-heading">
-          <div><h2>账号列表</h2><p>自动发送一次后，同一到期日不会重复发送。</p></div>
+          <div><h2>账号列表</h2><p>到期日 3 天内的未取消记录会标记为“马上到期”并自动置顶。</p></div>
           <div className="table-controls"><button className="button ghost" type="button" disabled={exporting} onClick={() => void exportSubscriptions()}>{exporting ? "导出中…" : "导出 Excel"}</button><button className="button ghost" type="button" onClick={() => void loadRows()}>刷新</button></div>
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>美区账号</th><th>账号</th><th>类型</th><th>到期时间</th><th>接收邮箱</th><th>提醒规则</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th>美区账号</th><th>账号</th><th>类型</th><th>到期时间</th><th>到期状态</th><th>接收邮箱</th><th>提醒规则</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
-              {loading && <tr><td colSpan={8} className="empty">加载中…</td></tr>}
-              {!loading && rows.length === 0 && <tr><td colSpan={8} className="empty">还没有账号。填写上方表单后开始管理提醒。</td></tr>}
+              {loading && <tr><td colSpan={9} className="empty">加载中…</td></tr>}
+              {!loading && rows.length === 0 && <tr><td colSpan={9} className="empty">还没有账号。填写上方表单后开始管理提醒。</td></tr>}
               {!loading && rows.map((subscription) => (
-                <tr key={subscription.id}>
-                  <td>{subscription.ownerEmail}</td><td>{subscription.accountEmail}</td><td>{displayService(subscription)}</td><td>{subscription.expiresOn}</td><td>{subscription.notificationEmail}</td>
+                <tr key={subscription.id} className={subscription.expiryState === "imminent" ? "imminent-row" : undefined}>
+                  <td>{subscription.ownerEmail}</td><td>{subscription.accountEmail}</td><td>{displayService(subscription)}</td><td>{subscription.expiresOn}</td><td>{subscription.expiryState === "imminent" ? <span className="badge imminent">⚠ 马上到期</span> : <span className="expiry-normal">—</span>}</td><td className="recipient-list">{subscription.notificationEmail.split(/,\s*/).map((email) => <span key={email}>{email}</span>)}</td>
                   <td><span>{subscription.reminderRule.enabled ? `提前 ${subscription.reminderRule.daysBefore} 天` : "不发送"}</span><small>{subscription.reminderRule.source === "typesafe" ? "TypeSafe 已解读备注" : subscription.nextSendOn ? `发送日 ${subscription.nextSendOn}` : "—"}</small></td>
                   <td><span className={`badge ${subscription.reminderState}`}>{stateText[subscription.reminderState]}</span></td>
                   <td><div className="row-actions"><button className="text-button" type="button" onClick={() => edit(subscription)}>编辑</button>{subscription.cancelled ? <button className="text-button" type="button" disabled={restoringId === subscription.id} onClick={() => void restoreReminder(subscription)}>{restoringId === subscription.id ? "恢复中…" : "恢复提醒"}</button> : <button className="text-button" type="button" disabled={sendingId === subscription.id || !subscription.reminderRule.enabled} onClick={() => void sendNow(subscription)}>{sendingId === subscription.id ? "发送中…" : "立即测试"}</button>}<button className="text-button danger" type="button" disabled={deletingId === subscription.id} onClick={() => void deleteSubscription(subscription)}>{deletingId === subscription.id ? "删除中…" : "删除"}</button></div></td>

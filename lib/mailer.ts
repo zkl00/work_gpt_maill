@@ -1,5 +1,6 @@
 import type { AppEnv } from "./cloudflare";
 import { getEmailCredentials } from "./email-config";
+import { notificationEmailList } from "./notification-emails";
 import { dateInTimezone } from "./reminder";
 import type { Subscription } from "./types";
 
@@ -52,8 +53,9 @@ function message(subscription: Subscription, timeZone: string | undefined): { su
 
 export async function sendExpirationReminder(subscription: Subscription, env: AppEnv): Promise<void> {
   const payload = message(subscription, env.APP_TIME_ZONE);
+  const recipients = notificationEmailList(subscription.notificationEmail);
   if (env.EMAIL_DELIVERY_MODE === "console") {
-    console.info("[email preview]", { to: subscription.notificationEmail, ...payload });
+    console.info("[email preview]", { to: recipients, ...payload });
     return;
   }
 
@@ -67,7 +69,7 @@ export async function sendExpirationReminder(subscription: Subscription, env: Ap
       Authorization: `Bearer ${credentials.apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ from: credentials.from, to: [subscription.notificationEmail], ...payload }),
+    body: JSON.stringify({ from: credentials.from, to: recipients, ...payload }),
   });
   if (!response.ok) {
     const detail = await response.text();

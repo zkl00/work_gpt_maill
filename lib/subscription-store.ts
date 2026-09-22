@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { normalizeNotificationEmails } from "./notification-emails";
 import { assertDate } from "./reminder";
 import type { ChatGptPlan, ReminderRule, SentReminder, Subscription, SubscriptionInput } from "./types";
 
@@ -40,11 +41,10 @@ export function validateSubscriptionInput(input: SubscriptionInput): Subscriptio
     ownerEmail: input.ownerEmail.trim(),
     accountEmail: input.accountEmail.trim(),
     serviceType: input.serviceType.trim(),
-    notificationEmail: input.notificationEmail.trim(),
+    notificationEmail: normalizeNotificationEmails(input.notificationEmail),
     notes: input.notes.trim(),
     chatGptPlan: input.chatGptPlan,
   };
-  if (!EMAIL.test(cleaned.notificationEmail)) throw new Error("请填写有效的接收邮箱。");
   if (!EMAIL.test(cleaned.ownerEmail)) throw new Error("请填写有效的美区账号邮箱。");
   if (!EMAIL.test(cleaned.accountEmail)) throw new Error("请填写有效的账号邮箱。");
   if (!cleaned.serviceType) throw new Error("请填写类型。");

@@ -1,4 +1,4 @@
-import type { ReminderState, Subscription } from "@/lib/types";
+import type { ExpiryState, ReminderState, Subscription } from "@/lib/types";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -51,6 +51,22 @@ export function getReminderState(
 
   const reminderDate = getReminderDate(subscription);
   return reminderDate !== null && reminderDate <= currentDate ? "due" : "scheduled";
+}
+
+export function getExpiryState(
+  subscription: Subscription,
+  today?: string,
+  timeZone?: string,
+): ExpiryState {
+  const currentDate = today || dateInTimezone(timeZone);
+  if (subscription.cancelled || subscription.status === "expired" || subscription.expiresOn < currentDate) {
+    return "normal";
+  }
+
+  const daysRemaining = Math.round(
+    (Date.parse(`${subscription.expiresOn}T00:00:00Z`) - Date.parse(`${currentDate}T00:00:00Z`)) / 86_400_000,
+  );
+  return daysRemaining <= 3 ? "imminent" : "normal";
 }
 
 export function shouldSendAutomaticReminder(

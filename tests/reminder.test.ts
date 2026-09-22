@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, getReminderDate, getReminderState, shouldSendAutomaticReminder } from "../lib/reminder";
+import { addDays, getExpiryState, getReminderDate, getReminderState, shouldSendAutomaticReminder } from "../lib/reminder";
 import type { Subscription } from "../lib/types";
 
 function subscription(overrides: Partial<Subscription> = {}): Subscription {
@@ -39,5 +39,12 @@ describe("expiration reminder schedule", () => {
   it("never auto-sends cancelled subscriptions or a date already sent", () => {
     expect(getReminderState(subscription({ cancelled: true }), "2026-09-30")).toBe("cancelled");
     expect(getReminderState(subscription({ sentReminders: [{ expiresOn: "2026-10-03", sentAt: "2026-09-30T01:00:00Z", kind: "automatic" }] }), "2026-09-30")).toBe("sent");
+  });
+
+  it("marks active subscriptions expiring within three days as imminent", () => {
+    const item = subscription();
+    expect(getExpiryState(item, "2026-09-30")).toBe("imminent");
+    expect(getExpiryState(item, "2026-09-29")).toBe("normal");
+    expect(getExpiryState(subscription({ cancelled: true }), "2026-09-30")).toBe("normal");
   });
 });

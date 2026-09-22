@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppEnv } from "@/lib/cloudflare";
-import { getReminderDate, getReminderState } from "@/lib/reminder";
+import { getExpiryState, getReminderDate, getReminderState } from "@/lib/reminder";
 import { resolveReminderRule } from "@/lib/reminder-rule";
 import { createSubscription, listSubscriptions } from "@/lib/subscription-store";
 import type { SubscriptionInput, SubscriptionView } from "@/lib/types";
@@ -13,14 +13,22 @@ function toView(
     ...subscription,
     nextSendOn: getReminderDate(subscription),
     reminderState: getReminderState(subscription, undefined, timeZone),
+    expiryState: getExpiryState(subscription, undefined, timeZone),
   };
+}
+
+function sortForAttention(subscriptions: SubscriptionView[]): SubscriptionView[] {
+  return subscriptions.sort((first, second) => {
+    const priority = Number(second.expiryState === "imminent") - Number(first.expiryState === "imminent");
+    return priority || first.expiresOn.localeCompare(second.expiresOn) || first.accountEmail.localeCompare(second.accountEmail);
+  });
 }
 
 export async function GET() {
   try {
     const env = await getAppEnv();
     const subscriptions = await listSubscriptions(env.EXPIRY_REMINDERS_DB);
-    return NextResponse.json(subscriptions.map((subscription) => toView(subscription, env.APP_TIME_ZONE)));
+    return NextResponse.json(sortForAttention(subscriptions.map((subscription) => toView(subscription, env.APP_TIME_ZONE))));
   } catch (error) {
     console.error("Unable to load subscriptions.", error);
     return NextResponse.json(

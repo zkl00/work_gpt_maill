@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppEnv } from "@/lib/cloudflare";
-import { getReminderDate, getReminderState } from "@/lib/reminder";
+import { getExpiryState, getReminderDate, getReminderState } from "@/lib/reminder";
 import { resolveReminderRule } from "@/lib/reminder-rule";
 import { deleteSubscription, updateSubscription } from "@/lib/subscription-store";
 import type { SubscriptionInput, SubscriptionView } from "@/lib/types";
@@ -15,6 +15,7 @@ function toView(
     ...subscription,
     nextSendOn: getReminderDate(subscription),
     reminderState: getReminderState(subscription, undefined, timeZone),
+    expiryState: getExpiryState(subscription, undefined, timeZone),
   };
 }
 
