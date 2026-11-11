@@ -6,7 +6,7 @@ import type { ChatGptPlan, ReminderRule, SentReminder, Subscription, Subscriptio
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const validStatuses = new Set(["active", "expired", "paused"]);
 const validServiceTypes = new Set(["chatgpt", "apple", "anzhuo", "other"]);
-const validChatGptPlans = new Set<ChatGptPlan>(["plus", "pro10", "pro20", "pro500"]);
+const validChatGptPlans = new Set<ChatGptPlan>(["plus", "pro10", "pro20", "pro200", "pro500"]);
 
 type SubscriptionRow = {
   id: string;
@@ -43,7 +43,7 @@ export function validateSubscriptionInput(input: SubscriptionInput): Subscriptio
     serviceType: input.serviceType.trim(),
     notificationEmail: normalizeNotificationEmails(input.notificationEmail),
     notes: input.notes.trim(),
-    chatGptPlan: input.chatGptPlan,
+    chatGptPlan: input.chatGptPlan === "pro20" ? "pro200" : input.chatGptPlan,
   };
   if (!EMAIL.test(cleaned.ownerEmail)) throw new Error("请填写有效的美区账号邮箱。");
   if (!EMAIL.test(cleaned.accountEmail)) throw new Error("请填写有效的账号邮箱。");
@@ -72,7 +72,7 @@ function mapSubscription(row: SubscriptionRow, sentReminders: SentReminder[]): S
     ownerEmail: row.owner_email,
     accountEmail: row.account_email,
     serviceType: row.service_type,
-    chatGptPlan: row.chatgpt_plan ?? undefined,
+    chatGptPlan: (row.chatgpt_plan === "pro20" ? "pro200" : row.chatgpt_plan) ?? undefined,
     activatedOn: row.activated_on,
     expiresOn: row.expires_on,
     status: row.status,

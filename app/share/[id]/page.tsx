@@ -6,7 +6,7 @@ import type { AccountStatus, ChatGptPlan, ReminderState, SubscriptionInput, Subs
 type FormValues = SubscriptionInput;
 
 const serviceTypeNames: Record<string, string> = { chatgpt: "ChatGPT", apple: "Apple", anzhuo: "安卓", other: "其他" };
-const planNames: Record<ChatGptPlan, string> = { plus: "Plus", pro10: "Pro 10", pro20: "Pro 20", pro500: "Pro 500" };
+const planNames: Record<ChatGptPlan, string> = { plus: "Plus", pro10: "Pro 10", pro20: "Pro 200", pro200: "Pro 200", pro500: "Pro 500" };
 
 const stateText: Record<ReminderState, string> = {
   cancelled: "已取消订阅",
@@ -226,7 +226,7 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
               <label>类型<select required value={form.serviceType} onChange={(event) => changeServiceType(event.target.value)}><option value="chatgpt">ChatGPT</option><option value="apple">Apple</option><option value="anzhuo">安卓</option><option value="other">其他</option></select></label>
             )}
             {isColVisible("chatGptPlan") && form.serviceType === "chatgpt" && (
-              <label>ChatGPT 套餐<select required value={form.chatGptPlan || ""} onChange={(event) => change("chatGptPlan", event.target.value as ChatGptPlan)}><option value="plus">Plus</option><option value="pro10">Pro 10</option><option value="pro20">Pro 20</option><option value="pro500">Pro 500</option></select></label>
+              <label>ChatGPT 套餐<select required value={(form.chatGptPlan === "pro20" ? "pro200" : form.chatGptPlan) || ""} onChange={(event) => change("chatGptPlan", event.target.value as ChatGptPlan)}><option value="plus">Plus</option><option value="pro10">Pro 10</option><option value="pro200">Pro 200</option><option value="pro500">Pro 500</option></select></label>
             )}
             <label>开通时间<input required type="date" value={form.activatedOn} onChange={(event) => change("activatedOn", event.target.value)} /></label>
             {isColVisible("expiresOn") && (

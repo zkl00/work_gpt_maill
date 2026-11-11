@@ -17,7 +17,7 @@ if (!Array.isArray(subscriptions)) {
 }
 
 const serviceTypeNames = { chatgpt: "ChatGPT", apple: "Apple", anzhuo: "安卓", other: "其他" };
-const planNames = { plus: "Plus", pro10: "Pro 10", pro20: "Pro 20", pro500: "Pro 500" };
+const planNames = { plus: "Plus", pro10: "Pro 10", pro20: "Pro 200", pro200: "Pro 200", pro500: "Pro 500" };
 const rows = subscriptions.map((subscription) => ({
   "美区账号": subscription.ownerEmail || "",
   "账号": subscription.accountEmail || "",

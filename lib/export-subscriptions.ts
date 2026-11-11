@@ -8,7 +8,7 @@ const serviceTypeNames: Record<string, string> = {
   anzhuo: "安卓",
   other: "其他",
 };
-const planNames: Record<string, string> = { plus: "Plus", pro10: "Pro 10", pro20: "Pro 20", pro500: "Pro 500" };
+const planNames: Record<string, string> = { plus: "Plus", pro10: "Pro 10", pro20: "Pro 200", pro200: "Pro 200", pro500: "Pro 500" };
 const reminderStateNames: Record<string, string> = {
   cancelled: "已取消订阅",
   disabled: "已关闭提醒",

@@ -56,7 +56,7 @@ function normalisePlan(value: unknown): ChatGptPlan | undefined {
   const normalized = text(value).toLowerCase().replace(/[\s_-]/g, "");
   if (normalized === "plus" || normalized === "plust") return "plus";
   if (normalized === "pro10") return "pro10";
-  if (normalized === "pro20") return "pro20";
+  if (normalized === "pro20" || normalized === "pro200") return "pro200";
   if (normalized === "pro500") return "pro500";
   return undefined;
 }

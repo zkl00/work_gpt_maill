@@ -19,7 +19,7 @@ type ImportPreview = {
 };
 
 const serviceTypeNames: Record<string, string> = { chatgpt: "ChatGPT", apple: "Apple", anzhuo: "安卓", other: "其他" };
-const planNames: Record<ChatGptPlan, string> = { plus: "Plus", pro10: "Pro 10", pro20: "Pro 20", pro500: "Pro 500" };
+const planNames: Record<ChatGptPlan, string> = { plus: "Plus", pro10: "Pro 10", pro20: "Pro 200", pro200: "Pro 200", pro500: "Pro 500" };
 
 function displayService(subscription: SubscriptionView): string {
   const type = serviceTypeNames[subscription.serviceType] || subscription.serviceType;
@@ -464,7 +464,7 @@ export default function Home() {
   async function restoreReminder(subscription: SubscriptionView) {
     if (subscription.serviceType === "chatgpt" && !subscription.chatGptPlan) {
       edit(subscription);
-      setError("这条旧 ChatGPT 记录还没有套餐，请先选择 Plus、Pro 10、Pro 20 或 Pro 500 后保存。");
+      setError("这条旧 ChatGPT 记录还没有套餐，请先选择 Plus、Pro 10、Pro 200 或 Pro 500 后保存。");
       return;
     }
     setRestoringId(subscription.id);
@@ -784,7 +784,7 @@ export default function Home() {
           <label>账号邮箱<input required type="email" value={form.accountEmail} onChange={(event) => change("accountEmail", event.target.value)} placeholder="account@example.com" /></label>
           <label>接收邮箱（可多个）<input required type="text" value={form.notificationEmail} onChange={(event) => change("notificationEmail", event.target.value)} placeholder="a@example.com, b@example.com" /></label>
           <label>类型<select required value={form.serviceType} onChange={(event) => changeServiceType(event.target.value)}><option value="" disabled>请选择类型</option><option value="chatgpt">ChatGPT</option><option value="apple">Apple</option><option value="anzhuo">安卓</option><option value="other">其他</option></select></label>
-          {form.serviceType === "chatgpt" && <label>ChatGPT 套餐<select required value={form.chatGptPlan || ""} onChange={(event) => change("chatGptPlan", event.target.value as ChatGptPlan)}><option value="" disabled>请选择套餐</option><option value="plus">Plus</option><option value="pro10">Pro 10</option><option value="pro20">Pro 20</option><option value="pro500">Pro 500</option></select></label>}
+          {form.serviceType === "chatgpt" && <label>ChatGPT 套餐<select required value={(form.chatGptPlan === "pro20" ? "pro200" : form.chatGptPlan) || ""} onChange={(event) => change("chatGptPlan", event.target.value as ChatGptPlan)}><option value="" disabled>请选择套餐</option><option value="plus">Plus</option><option value="pro10">Pro 10</option><option value="pro200">Pro 200</option><option value="pro500">Pro 500</option></select></label>}
           <label>开通时间<input required type="date" value={form.activatedOn} onChange={(event) => change("activatedOn", event.target.value)} /></label>
           <label>到期时间<input required type="date" value={form.expiresOn} onChange={(event) => change("expiresOn", event.target.value)} /></label>
           <label>状态<select value={form.status} onChange={(event) => change("status", event.target.value as AccountStatus)}><option value="active">已续费 / 正常</option><option value="paused">暂停</option><option value="expired">已到期</option></select></label>

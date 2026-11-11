@@ -45,4 +45,19 @@ describe("subscription spreadsheet export", () => {
       "套餐": "Pro 500",
     });
   });
+
+  it("exports pro200 and legacy pro20 as Pro 200", () => {
+    const workbook = XLSX.read(exportSubscriptionsWorkbook([
+      { ...subscription, id: "sub1", chatGptPlan: "pro200" },
+      { ...subscription, id: "sub2", chatGptPlan: "pro20" },
+    ]), { type: "buffer" });
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["账号到期提醒"]);
+
+    expect(rows[0]).toMatchObject({
+      "套餐": "Pro 200",
+    });
+    expect(rows[1]).toMatchObject({
+      "套餐": "Pro 200",
+    });
+  });
 });

@@ -39,6 +39,19 @@ describe("subscription spreadsheet import", () => {
     expect(preview.candidates[0].input.chatGptPlan).toBe("pro500");
   });
 
+  it("normalizes Pro 200 and legacy Pro 20 plans correctly to pro200", () => {
+    const preview = parseSubscriptionWorkbook(workbookBuffer([
+      ["美区账号", "账号", "类型", "套餐", "开通时间", "到期时间"],
+      ["owner@example.com", "account1@example.com", "ChatGPT", "Pro 200", "2026/09/01", "2026/10/01"],
+      ["owner@example.com", "account2@example.com", "ChatGPT", "Pro 20", "2026/09/01", "2026/10/01"],
+    ]));
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.candidates).toHaveLength(2);
+    expect(preview.candidates[0].input.chatGptPlan).toBe("pro200");
+    expect(preview.candidates[1].input.chatGptPlan).toBe("pro200");
+  });
+
   it("uses the owner email as notification email when the optional column is absent", () => {
     const preview = parseSubscriptionWorkbook(workbookBuffer([
       ["美区账号", "账号", "类型", "开通时间", "到期时间"],
