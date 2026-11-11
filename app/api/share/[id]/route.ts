@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth";
 import { getAppEnv } from "@/lib/cloudflare";
 import { getExpiryState, getReminderDate, getReminderState } from "@/lib/reminder";
 import { deleteSharedLink, getSharedSubscriptions } from "@/lib/share-store";
@@ -58,9 +59,10 @@ export async function GET(_request: Request, context: Context) {
   }
 }
 
-export async function DELETE(_request: Request, context: Context) {
+export async function DELETE(request: Request, context: Context) {
   try {
     const env = await getAppEnv();
+    await assertAdmin(request, env.EXPIRY_REMINDERS_DB);
     const { id } = await context.params;
     const deleted = await deleteSharedLink(env.EXPIRY_REMINDERS_DB, id);
     if (!deleted) {

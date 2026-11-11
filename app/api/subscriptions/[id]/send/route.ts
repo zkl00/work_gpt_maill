@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth";
 import { getAppEnv } from "@/lib/cloudflare";
 import { sendExpirationReminder } from "@/lib/mailer";
 import { listSubscriptions, recordReminderSent } from "@/lib/subscription-store";
 
 type Context = { params: Promise<{ id: string }> };
 
-export async function POST(_request: Request, context: Context) {
+export async function POST(request: Request, context: Context) {
   try {
     const env = await getAppEnv();
+    await assertAdmin(request, env.EXPIRY_REMINDERS_DB);
     const { id } = await context.params;
     const subscription = (await listSubscriptions(env.EXPIRY_REMINDERS_DB)).find((item) => item.id === id);
     if (!subscription) return NextResponse.json({ error: "未找到该账号。" }, { status: 404 });

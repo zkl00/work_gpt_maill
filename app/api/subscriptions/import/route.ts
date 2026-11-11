@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth";
 import { getAppEnv } from "@/lib/cloudflare";
 import { parseSubscriptionWorkbook } from "@/lib/import-subscriptions";
 import { resolveFallbackReminderRule } from "@/lib/reminder-rule";
@@ -15,6 +16,7 @@ function duplicateKey(input: SubscriptionInput): string {
 export async function POST(request: Request) {
   try {
     const env = await getAppEnv();
+    await assertAdmin(request, env.EXPIRY_REMINDERS_DB);
     if (request.headers.get("content-type")?.includes("application/json")) {
       const body = (await request.json()) as { rows?: SubscriptionInput[] };
       const rows = Array.isArray(body.rows) ? body.rows : [];

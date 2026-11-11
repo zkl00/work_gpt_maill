@@ -34,3 +34,9 @@ h1,h2,p { margin-top:0; } h1 { margin-bottom:10px; font-size:clamp(30px,4vw,44px
 .checkbox-col { width:38px; text-align:center; padding-left:14px; padding-right:6px; }
 .checkbox-col input { cursor:pointer; width:15px; height:15px; margin:0; accent-color:var(--accent); }
 
+.login-card { max-width:440px; margin:60px auto; padding:36px; border:1px solid var(--line); border-radius:18px; background:#fff; box-shadow:0 16px 36px rgba(15,23,42,0.06); }
+.login-card h2 { margin:0 0 8px; font-size:22px; text-align:center; }
+.login-card p { color:var(--muted); font-size:13.5px; text-align:center; margin-bottom:24px; line-height:1.5; }
+.login-form { display:flex; flex-direction:column; gap:16px; }
+.auth-header-actions { display:flex; gap:8px; align-items:center; }
+

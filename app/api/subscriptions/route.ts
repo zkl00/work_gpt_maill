@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth";
 import { getAppEnv } from "@/lib/cloudflare";
 import { getExpiryState, getReminderDate, getReminderState } from "@/lib/reminder";
 import { resolveReminderRule } from "@/lib/reminder-rule";
@@ -24,16 +25,17 @@ function sortForAttention(subscriptions: SubscriptionView[]): SubscriptionView[]
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const env = await getAppEnv();
+    await assertAdmin(request, env.EXPIRY_REMINDERS_DB);
     const subscriptions = await listSubscriptions(env.EXPIRY_REMINDERS_DB);
     return NextResponse.json(sortForAttention(subscriptions.map((subscription) => toView(subscription, env.APP_TIME_ZONE))));
   } catch (error) {
-    console.error("Unable to load subscriptions.", error);
+    const status = (error as { status?: number })?.status || 500;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "加载账号失败。" },
-      { status: 500 },
+      { status },
     );
   }
 }
@@ -41,6 +43,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const env = await getAppEnv();
+    await assertAdmin(request, env.EXPIRY_REMINDERS_DB);
     const input = (await request.json()) as SubscriptionInput;
     const reminderDays = input.reminderDays ?? 3;
     const reminderRule = await resolveReminderRule(input.notes || "", reminderDays, env.TYPESAFE_API_KEY);

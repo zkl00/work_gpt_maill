@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertAdmin } from "@/lib/auth";
 import { getAppEnv } from "@/lib/cloudflare";
 import { getExpiryState, getReminderDate, getReminderState } from "@/lib/reminder";
 import { resolveReminderRule } from "@/lib/reminder-rule";
@@ -22,6 +23,7 @@ function toView(
 export async function PUT(request: Request, context: Context) {
   try {
     const env = await getAppEnv();
+    await assertAdmin(request, env.EXPIRY_REMINDERS_DB);
     const { id } = await context.params;
     const input = (await request.json()) as SubscriptionInput;
     const reminderRule = await resolveReminderRule(
@@ -40,10 +42,19 @@ export async function PUT(request: Request, context: Context) {
   }
 }
 
-export async function DELETE(_request: Request, context: Context) {
-  const env = await getAppEnv();
-  const { id } = await context.params;
-  const deleted = await deleteSubscription(env.EXPIRY_REMINDERS_DB, id);
-  if (!deleted) return NextResponse.json({ error: "未找到该账号。" }, { status: 404 });
-  return new NextResponse(null, { status: 204 });
+export async function DELETE(request: Request, context: Context) {
+  try {
+    const env = await getAppEnv();
+    await assertAdmin(request, env.EXPIRY_REMINDERS_DB);
+    const { id } = await context.params;
+    const deleted = await deleteSubscription(env.EXPIRY_REMINDERS_DB, id);
+    if (!deleted) return NextResponse.json({ error: "未找到该账号。" }, { status: 404 });
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    const status = (error as { status?: number })?.status || 500;
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "删除失败。" },
+      { status },
+    );
+  }
 }

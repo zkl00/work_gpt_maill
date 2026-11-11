@@ -126,6 +126,18 @@ export default function Home() {
   const [generatingShare, setGeneratingShare] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // 身份认证状态
+  const [authStatus, setAuthStatus] = useState<{ initialized: boolean; authenticated: boolean } | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
   const dueCount = useMemo(
     () => rows.filter((item) => item.reminderState === "due").length,
     [rows],
@@ -251,10 +263,124 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function checkAuth() {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch("/api/auth", { cache: "no-store" });
+      if (!res.ok) throw new Error("获取登录状态失败。");
+      const data = (await res.json()) as { initialized: boolean; authenticated: boolean };
+      setAuthStatus(data);
+      if (data.authenticated) {
+        void loadRows();
+        void loadEmailConfig();
+        void loadSharedLinks();
+      }
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "网络异常。");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setAuthSubmitting(true);
+    setAuthError(null);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "login", password: authPassword }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "登录失败。");
+      setAuthStatus({ initialized: true, authenticated: true });
+      setAuthPassword("");
+      void loadRows();
+      void loadEmailConfig();
+      void loadSharedLinks();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "登录失败。");
+    } finally {
+      setAuthSubmitting(false);
+    }
+  }
+
+  async function handleSetup(e: React.FormEvent) {
+    e.preventDefault();
+    if (authPassword.length < 6) {
+      setAuthError("密码长度不能少于 6 位。");
+      return;
+    }
+    if (authPassword !== authConfirmPassword) {
+      setAuthError("两次输入的密码不一致。");
+      return;
+    }
+    setAuthSubmitting(true);
+    setAuthError(null);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setup", password: authPassword }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "设置失败。");
+      setAuthStatus({ initialized: true, authenticated: true });
+      setAuthPassword("");
+      setAuthConfirmPassword("");
+      setNotice("管理员密码设置成功！已自动进入管理后台。");
+      void loadRows();
+      void loadEmailConfig();
+      void loadSharedLinks();
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "设置失败。");
+    } finally {
+      setAuthSubmitting(false);
+    }
+  }
+
+  async function handleLogout() {
+    if (!window.confirm("确定退出管理后台吗？")) return;
+    try {
+      await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "logout" }),
+      });
+      setAuthStatus({ initialized: true, authenticated: false });
+      setRows([]);
+    } catch {
+      window.location.reload();
+    }
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setChangingPassword(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "change-password", oldPassword, newPassword }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "修改失败。");
+      setNotice("密码修改成功！");
+      setChangePasswordModalOpen(false);
+      setOldPassword("");
+      setNewPassword("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "修改失败。");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
   useEffect(() => {
-    void loadRows();
-    void loadEmailConfig();
-    void loadSharedLinks();
+    void checkAuth();
     if (!("Notification" in window)) {
       setDesktopPermission("unsupported");
       return;
@@ -510,6 +636,82 @@ export default function Home() {
       ? "浏览器不支持电脑提醒"
       : "开启电脑提醒";
 
+  if (authLoading) {
+    return (
+      <main style={{ textAlign: "center", paddingTop: "120px" }}>
+        <p style={{ color: "var(--muted)", fontSize: "15px" }}>正在验证管理员身份…</p>
+      </main>
+    );
+  }
+
+  if (authStatus && !authStatus.initialized) {
+    return (
+      <main>
+        <div className="login-card">
+          <h2>🔐 首次使用设置密码</h2>
+          <p>系统目前尚未设置管理密码。请为您的账号到期总管理后台设置一个安全访问密码。</p>
+          {authError && <p className="alert error" style={{ margin: "0 0 16px" }}>{authError}</p>}
+          <form onSubmit={handleSetup} className="login-form">
+            <label>
+              设置管理员密码（至少 6 位）
+              <input
+                required
+                type="password"
+                placeholder="请输入管理密码"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+              />
+            </label>
+            <label>
+              确认管理员密码
+              <input
+                required
+                type="password"
+                placeholder="请再次输入管理密码"
+                value={authConfirmPassword}
+                onChange={(e) => setAuthConfirmPassword(e.target.value)}
+              />
+            </label>
+            <button className="button primary" disabled={authSubmitting} style={{ marginTop: "8px" }}>
+              {authSubmitting ? "保存中…" : "设置密码并进入后台"}
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  if (authStatus && !authStatus.authenticated) {
+    return (
+      <main>
+        <div className="login-card">
+          <h2>🔐 管理后台登录</h2>
+          <p>当前页面为总账号管理后台，请输入管理员访问密码后查看。</p>
+          {authError && <p className="alert error" style={{ margin: "0 0 16px" }}>{authError}</p>}
+          <form onSubmit={handleLogin} className="login-form">
+            <label>
+              管理员密码
+              <input
+                required
+                autoFocus
+                type="password"
+                placeholder="请输入管理密码"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+              />
+            </label>
+            <button className="button primary" disabled={authSubmitting} style={{ marginTop: "8px" }}>
+              {authSubmitting ? "登录中…" : "进入管理后台"}
+            </button>
+          </form>
+          <div style={{ textAlign: "center", marginTop: "24px" }}>
+            <small style={{ color: "var(--muted)" }}>若您是被分享人，请通过专属分享链接访问授权内容。</small>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main>
       <section className="hero">
@@ -518,9 +720,19 @@ export default function Home() {
           <h1>账号到期提醒</h1>
           <p className="intro">记录账号、接收邮箱和到期日；系统在指定日期自动发送邮件。</p>
         </div>
-        <div className="summary" aria-label="待处理统计">
-          <span>今日待发送</span>
-          <strong>{dueCount}</strong>
+        <div style={{ display: "flex", gap: "16px", alignItems: "flex-end" }}>
+          <div className="auth-header-actions" style={{ marginBottom: "6px" }}>
+            <button className="button ghost" type="button" onClick={() => setChangePasswordModalOpen(true)}>
+              修改密码
+            </button>
+            <button className="button ghost" type="button" onClick={() => void handleLogout()}>
+              退出
+            </button>
+          </div>
+          <div className="summary" aria-label="待处理统计">
+            <span>今日待发送</span>
+            <strong>{dueCount}</strong>
+          </div>
         </div>
       </section>
 
@@ -838,6 +1050,50 @@ export default function Home() {
             <div className="modal-footer">
               <button className="button ghost" type="button" onClick={() => setManageSharesOpen(false)}>关闭</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 修改密码模态框 */}
+      {changePasswordModalOpen && (
+        <div className="modal-overlay" onClick={() => setChangePasswordModalOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>修改管理员密码</h3>
+              <button className="text-button" type="button" onClick={() => setChangePasswordModalOpen(false)}>✕</button>
+            </div>
+            <form onSubmit={handleChangePassword}>
+              <div className="modal-body">
+                <label>
+                  当前密码
+                  <input
+                    required
+                    type="password"
+                    placeholder="请输入当前密码"
+                    value={oldPassword}
+                    onChange={(e) => setOldPassword(e.target.value)}
+                  />
+                </label>
+                <label>
+                  新密码（至少 6 位）
+                  <input
+                    required
+                    type="password"
+                    placeholder="请输入新密码"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="modal-footer">
+                <button className="button ghost" type="button" onClick={() => setChangePasswordModalOpen(false)}>
+                  取消
+                </button>
+                <button className="button primary" disabled={changingPassword}>
+                  {changingPassword ? "修改中…" : "确认修改"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
