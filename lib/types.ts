@@ -62,6 +62,7 @@ export const SHAREABLE_COLUMNS = [
   { key: "accountEmail", label: "账号" },
   { key: "serviceType", label: "类型" },
   { key: "chatGptPlan", label: "套餐" },
+  { key: "activatedOn", label: "开通时间" },
   { key: "expiresOn", label: "到期时间" },
   { key: "expiryState", label: "到期状态" },
   { key: "notificationEmail", label: "接收邮箱" },

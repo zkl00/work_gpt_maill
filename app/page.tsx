@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { addDays, addMonths, getExpiryBadge, getLocalToday } from "@/lib/date-utils";
 import { SHAREABLE_COLUMNS } from "@/lib/types";
 import type { AccountStatus, ChatGptPlan, ReminderState, SharedLink, SubscriptionInput, SubscriptionView } from "@/lib/types";
 
@@ -44,16 +45,15 @@ function sortRowsForAttention(items: SubscriptionView[]): SubscriptionView[] {
   });
 }
 
-const today = new Date().toISOString().slice(0, 10);
-
 function initialForm(): FormValues {
+  const localToday = getLocalToday();
   return {
     ownerEmail: "",
     accountEmail: "",
     serviceType: "",
     chatGptPlan: undefined,
-    activatedOn: today,
-    expiresOn: today,
+    activatedOn: localToday,
+    expiresOn: addMonths(localToday, 1),
     status: "active",
     cancelled: false,
     notes: "",
@@ -91,6 +91,7 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [renewingId, setRenewingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -418,6 +419,10 @@ export default function Home() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (form.expiresOn < form.activatedOn) {
+      setError("到期时间不能早于开通时间。");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setNotice(null);
@@ -441,6 +446,46 @@ export default function Home() {
       setError(submitError instanceof Error ? submitError.message : "保存失败。" );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function quickRenewOneMonth(subscription: SubscriptionView) {
+    setRenewingId(subscription.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const currentToday = getLocalToday();
+      const newActivatedOn = subscription.expiresOn < currentToday ? currentToday : subscription.expiresOn;
+      const newExpiresOn = addMonths(newActivatedOn, 1);
+
+      const payload: SubscriptionInput = {
+        ownerEmail: subscription.ownerEmail,
+        accountEmail: subscription.accountEmail,
+        serviceType: subscription.serviceType,
+        chatGptPlan: subscription.chatGptPlan,
+        activatedOn: newActivatedOn,
+        expiresOn: newExpiresOn,
+        status: "active",
+        cancelled: false,
+        notes: subscription.notes,
+        notificationEmail: subscription.notificationEmail,
+        reminderDays: subscription.reminderRule.daysBefore,
+      };
+
+      const response = await fetch(`/api/subscriptions/${subscription.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error(await readApiError(response));
+      const updated = (await response.json()) as SubscriptionView;
+      setRows((current) => sortRowsForAttention(current.map((item) => (item.id === updated.id ? updated : item))));
+      setNotice(`账号 ${subscription.accountEmail} 续费 1 个月成功！新到期日：${newExpiresOn}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "续费失败，请重试。");
+    } finally {
+      setRenewingId(null);
     }
   }
 
@@ -785,8 +830,25 @@ export default function Home() {
           <label>接收邮箱（可多个）<input required type="text" value={form.notificationEmail} onChange={(event) => change("notificationEmail", event.target.value)} placeholder="a@example.com, b@example.com" /></label>
           <label>类型<select required value={form.serviceType} onChange={(event) => changeServiceType(event.target.value)}><option value="" disabled>请选择类型</option><option value="chatgpt">ChatGPT</option><option value="apple">Apple</option><option value="anzhuo">安卓</option><option value="other">其他</option></select></label>
           {form.serviceType === "chatgpt" && <label>ChatGPT 套餐<select required value={(form.chatGptPlan === "pro20" ? "pro200" : form.chatGptPlan) || ""} onChange={(event) => change("chatGptPlan", event.target.value as ChatGptPlan)}><option value="" disabled>请选择套餐</option><option value="plus">Plus</option><option value="pro10">Pro 10</option><option value="pro200">Pro 200</option><option value="pro500">Pro 500</option></select></label>}
-          <label>开通时间<input required type="date" value={form.activatedOn} onChange={(event) => change("activatedOn", event.target.value)} /></label>
-          <label>到期时间<input required type="date" value={form.expiresOn} onChange={(event) => change("expiresOn", event.target.value)} /></label>
+          <div className="date-input-group">
+            <label>开通时间<input required type="date" value={form.activatedOn} onChange={(event) => change("activatedOn", event.target.value)} /></label>
+            <div className="date-shortcuts">
+              <button type="button" className="shortcut-btn" onClick={() => change("activatedOn", getLocalToday())}>今天</button>
+              <button type="button" className="shortcut-btn" onClick={() => change("activatedOn", addDays(getLocalToday(), -1))}>昨天</button>
+            </div>
+          </div>
+          <div className="date-input-group">
+            <label>到期时间<input required type="date" value={form.expiresOn} onChange={(event) => change("expiresOn", event.target.value)} /></label>
+            <div className="date-shortcuts">
+              <button type="button" className="shortcut-btn" onClick={() => change("expiresOn", addMonths(form.activatedOn || getLocalToday(), 1))}>+1个月</button>
+              <button type="button" className="shortcut-btn" onClick={() => change("expiresOn", addDays(form.activatedOn || getLocalToday(), 30))}>+30天</button>
+              <button type="button" className="shortcut-btn" onClick={() => change("expiresOn", addMonths(form.activatedOn || getLocalToday(), 3))}>+3个月</button>
+              <button type="button" className="shortcut-btn" onClick={() => change("expiresOn", addMonths(form.activatedOn || getLocalToday(), 12))}>+1年</button>
+            </div>
+            {form.activatedOn && form.expiresOn && form.expiresOn < form.activatedOn && (
+              <span className="field-hint-error">⚠️ 到期时间不能早于开通时间</span>
+            )}
+          </div>
           <label>状态<select value={form.status} onChange={(event) => change("status", event.target.value as AccountStatus)}><option value="active">已续费 / 正常</option><option value="paused">暂停</option><option value="expired">已到期</option></select></label>
           <label>默认提前提醒<select value={form.reminderDays} onChange={(event) => change("reminderDays", Number(event.target.value))}><option value={0}>到期当天</option><option value={1}>提前 1 天</option><option value={3}>提前 3 天</option><option value={7}>提前 7 天</option><option value={14}>提前 14 天</option><option value={30}>提前 30 天</option></select></label>
           <label>订阅状态<select value={form.cancelled ? "cancelled" : "active"} onChange={(event) => change("cancelled", event.target.value === "cancelled")}><option value="active">正常订阅（发送提醒）</option><option value="cancelled">已取消订阅（不发送提醒）</option></select></label>
@@ -840,6 +902,7 @@ export default function Home() {
                 <th>账号</th>
                 <th>类型</th>
                 <th>套餐</th>
+                <th>开通时间</th>
                 <th>到期时间</th>
                 <th>到期状态</th>
                 <th>接收邮箱</th>
@@ -849,8 +912,8 @@ export default function Home() {
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={11} className="empty">加载中…</td></tr>}
-              {!loading && rows.length === 0 && <tr><td colSpan={11} className="empty">还没有账号。填写上方表单后开始管理提醒。</td></tr>}
+              {loading && <tr><td colSpan={12} className="empty">加载中…</td></tr>}
+              {!loading && rows.length === 0 && <tr><td colSpan={12} className="empty">还没有账号。填写上方表单后开始管理提醒。</td></tr>}
               {!loading && rows.map((subscription) => (
                 <tr key={subscription.id} className={subscription.expiryState === "imminent" ? "imminent-row" : undefined}>
                   <td className="checkbox-col">
@@ -865,12 +928,49 @@ export default function Home() {
                   <td>{subscription.accountEmail}</td>
                   <td>{serviceTypeNames[subscription.serviceType] || subscription.serviceType}</td>
                   <td>{subscription.chatGptPlan ? planNames[subscription.chatGptPlan] : <span className="expiry-normal">—</span>}</td>
+                  <td>{subscription.activatedOn}</td>
                   <td>{subscription.expiresOn}</td>
-                  <td>{subscription.expiryState === "imminent" ? <span className="badge imminent">⚠ 马上到期</span> : <span className="expiry-normal">—</span>}</td>
+                  <td>
+                    {subscription.cancelled ? (
+                      <span className="badge cancelled">已取消订阅</span>
+                    ) : (
+                      (() => {
+                        const badge = getExpiryBadge(subscription.expiresOn);
+                        return <span className={`badge ${badge.level}`}>{badge.level === "imminent" ? `⚠ ${badge.text}` : badge.text}</span>;
+                      })()
+                    )}
+                  </td>
                   <td className="recipient-list">{subscription.notificationEmail.split(/,\s*/).map((email) => <span key={email}>{email}</span>)}</td>
                   <td><span>{subscription.reminderRule.enabled ? `提前 ${subscription.reminderRule.daysBefore} 天` : "不发送"}</span><small>{subscription.reminderRule.source === "typesafe" ? "TypeSafe 已解读备注" : subscription.nextSendOn ? `发送日 ${subscription.nextSendOn}` : "—"}</small></td>
                   <td><span className={`badge ${subscription.reminderState}`}>{stateText[subscription.reminderState]}</span></td>
-                  <td><div className="row-actions"><button className="text-button" type="button" onClick={() => edit(subscription)}>编辑</button>{subscription.cancelled ? <button className="text-button" type="button" disabled={restoringId === subscription.id} onClick={() => void restoreReminder(subscription)}>{restoringId === subscription.id ? "恢复中…" : "恢复提醒"}</button> : <button className="text-button" type="button" disabled={sendingId === subscription.id || !subscription.reminderRule.enabled} onClick={() => void sendNow(subscription)}>{sendingId === subscription.id ? "发送中…" : "立即测试"}</button>}<button className="text-button danger" type="button" disabled={deletingId === subscription.id} onClick={() => void deleteSubscription(subscription)}>{deletingId === subscription.id ? "删除中…" : "删除"}</button></div></td>
+                  <td>
+                    <div className="row-actions">
+                      <button className="text-button" type="button" onClick={() => edit(subscription)}>
+                        编辑
+                      </button>
+                      <button
+                        className="text-button"
+                        type="button"
+                        disabled={renewingId === subscription.id}
+                        onClick={() => void quickRenewOneMonth(subscription)}
+                        title="开通时间设为上次到期日/今天，到期时间顺延 1 个月"
+                      >
+                        {renewingId === subscription.id ? "续费中…" : "续费+1月"}
+                      </button>
+                      {subscription.cancelled ? (
+                        <button className="text-button" type="button" disabled={restoringId === subscription.id} onClick={() => void restoreReminder(subscription)}>
+                          {restoringId === subscription.id ? "恢复中…" : "恢复提醒"}
+                        </button>
+                      ) : (
+                        <button className="text-button" type="button" disabled={sendingId === subscription.id || !subscription.reminderRule.enabled} onClick={() => void sendNow(subscription)}>
+                          {sendingId === subscription.id ? "发送中…" : "立即测试"}
+                        </button>
+                      )}
+                      <button className="text-button danger" type="button" disabled={deletingId === subscription.id} onClick={() => void deleteSubscription(subscription)}>
+                        {deletingId === subscription.id ? "删除中…" : "删除"}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

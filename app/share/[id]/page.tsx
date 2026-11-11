@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { addDays, addMonths, getExpiryBadge, getLocalToday } from "@/lib/date-utils";
 import type { AccountStatus, ChatGptPlan, ReminderState, SubscriptionInput, SubscriptionView, SharedLink } from "@/lib/types";
 
 type FormValues = SubscriptionInput;
@@ -108,6 +109,10 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
   async function submitEdit(event: React.FormEvent) {
     event.preventDefault();
     if (!form || !editingId) return;
+    if (form.expiresOn < form.activatedOn) {
+      setError("到期时间不能早于开通时间。");
+      return;
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -228,9 +233,26 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
             {isColVisible("chatGptPlan") && form.serviceType === "chatgpt" && (
               <label>ChatGPT 套餐<select required value={(form.chatGptPlan === "pro20" ? "pro200" : form.chatGptPlan) || ""} onChange={(event) => change("chatGptPlan", event.target.value as ChatGptPlan)}><option value="plus">Plus</option><option value="pro10">Pro 10</option><option value="pro200">Pro 200</option><option value="pro500">Pro 500</option></select></label>
             )}
-            <label>开通时间<input required type="date" value={form.activatedOn} onChange={(event) => change("activatedOn", event.target.value)} /></label>
+            <div className="date-input-group">
+              <label>开通时间<input required type="date" value={form.activatedOn} onChange={(event) => change("activatedOn", event.target.value)} /></label>
+              <div className="date-shortcuts">
+                <button type="button" className="shortcut-btn" onClick={() => change("activatedOn", getLocalToday())}>今天</button>
+                <button type="button" className="shortcut-btn" onClick={() => change("activatedOn", addDays(getLocalToday(), -1))}>昨天</button>
+              </div>
+            </div>
             {isColVisible("expiresOn") && (
-              <label>到期时间<input required type="date" value={form.expiresOn} onChange={(event) => change("expiresOn", event.target.value)} /></label>
+              <div className="date-input-group">
+                <label>到期时间<input required type="date" value={form.expiresOn} onChange={(event) => change("expiresOn", event.target.value)} /></label>
+                <div className="date-shortcuts">
+                  <button type="button" className="shortcut-btn" onClick={() => change("expiresOn", addMonths(form.activatedOn || getLocalToday(), 1))}>+1个月</button>
+                  <button type="button" className="shortcut-btn" onClick={() => change("expiresOn", addDays(form.activatedOn || getLocalToday(), 30))}>+30天</button>
+                  <button type="button" className="shortcut-btn" onClick={() => change("expiresOn", addMonths(form.activatedOn || getLocalToday(), 3))}>+3个月</button>
+                  <button type="button" className="shortcut-btn" onClick={() => change("expiresOn", addMonths(form.activatedOn || getLocalToday(), 12))}>+1年</button>
+                </div>
+                {form.activatedOn && form.expiresOn && form.expiresOn < form.activatedOn && (
+                  <span className="field-hint-error">⚠️ 到期时间不能早于开通时间</span>
+                )}
+              </div>
             )}
             {isColVisible("status") && (
               <label>状态<select value={form.status} onChange={(event) => change("status", event.target.value as AccountStatus)}><option value="active">已续费 / 正常</option><option value="paused">暂停</option><option value="expired">已到期</option></select></label>
@@ -268,6 +290,7 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
                 {isColVisible("accountEmail") && <th>账号</th>}
                 {isColVisible("serviceType") && <th>类型</th>}
                 {isColVisible("chatGptPlan") && <th>套餐</th>}
+                {isColVisible("activatedOn") && <th>开通时间</th>}
                 {isColVisible("expiresOn") && <th>到期时间</th>}
                 {isColVisible("expiryState") && <th>到期状态</th>}
                 {isColVisible("notificationEmail") && <th>接收邮箱</th>}
@@ -287,8 +310,20 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
                   {isColVisible("accountEmail") && <td>{subscription.accountEmail}</td>}
                   {isColVisible("serviceType") && <td>{serviceTypeNames[subscription.serviceType] || subscription.serviceType}</td>}
                   {isColVisible("chatGptPlan") && <td>{subscription.chatGptPlan ? planNames[subscription.chatGptPlan] : <span className="expiry-normal">—</span>}</td>}
+                  {isColVisible("activatedOn") && <td>{subscription.activatedOn}</td>}
                   {isColVisible("expiresOn") && <td>{subscription.expiresOn}</td>}
-                  {isColVisible("expiryState") && <td>{subscription.expiryState === "imminent" ? <span className="badge imminent">⚠ 马上到期</span> : <span className="expiry-normal">—</span>}</td>}
+                  {isColVisible("expiryState") && (
+                    <td>
+                      {subscription.cancelled ? (
+                        <span className="badge cancelled">已取消订阅</span>
+                      ) : (
+                        (() => {
+                          const badge = getExpiryBadge(subscription.expiresOn);
+                          return <span className={`badge ${badge.level}`}>{badge.level === "imminent" ? `⚠ ${badge.text}` : badge.text}</span>;
+                        })()
+                      )}
+                    </td>
+                  )}
                   {isColVisible("notificationEmail") && <td className="recipient-list">{subscription.notificationEmail.split(/,\s*/).map((email) => <span key={email}>{email}</span>)}</td>}
                   {isColVisible("reminderRule") && <td><span>{subscription.reminderRule.enabled ? `提前 ${subscription.reminderRule.daysBefore} 天` : "不发送"}</span></td>}
                   {isColVisible("status") && <td><span className={`badge ${subscription.reminderState}`}>{stateText[subscription.reminderState]}</span></td>}

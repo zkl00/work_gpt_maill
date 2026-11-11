@@ -16,6 +16,7 @@ export const DEFAULT_VISIBLE_COLUMNS: string[] = [
   "accountEmail",
   "serviceType",
   "chatGptPlan",
+  "activatedOn",
   "expiresOn",
   "expiryState",
   "status",
