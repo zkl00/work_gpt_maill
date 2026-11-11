@@ -23,12 +23,13 @@ function createMockDatabase() {
             return { meta: { changes: 0 } };
           }
           if (query.includes("INSERT INTO shared_links")) {
-            const [id, subscription_ids, allow_edit, allow_delete, title, created_at, updated_at] = boundValues;
+            const [id, subscription_ids, allow_edit, allow_delete, visible_columns, title, created_at, updated_at] = boundValues;
             store.set(id, {
               id,
               subscription_ids,
               allow_edit,
               allow_delete,
+              visible_columns,
               title,
               created_at,
               updated_at,
@@ -86,11 +87,26 @@ describe("share-store", () => {
     expect(link.allowEdit).toBe(true);
     expect(link.allowDelete).toBe(false);
     expect(link.title).toBe("测试分享");
+    expect(link.visibleColumns).toContain("accountEmail");
+    expect(link.visibleColumns).not.toContain("ownerEmail");
 
     const fetched = await getSharedLink(db, link.id);
     expect(fetched).not.toBeNull();
     expect(fetched?.subscriptionIds).toEqual(["sub-1", "sub-2"]);
     expect(fetched?.allowEdit).toBe(true);
+    expect(fetched?.visibleColumns).toEqual(link.visibleColumns);
+  });
+
+  it("creates a shared link with custom visibleColumns", async () => {
+    const db = createMockDatabase();
+    const link = await createSharedLink(db, {
+      subscriptionIds: ["sub-1"],
+      visibleColumns: ["accountEmail", "expiresOn"],
+    });
+
+    expect(link.visibleColumns).toEqual(["accountEmail", "expiresOn"]);
+    const fetched = await getSharedLink(db, link.id);
+    expect(fetched?.visibleColumns).toEqual(["accountEmail", "expiresOn"]);
   });
 
   it("fails to create a shared link with empty subscriptionIds", async () => {

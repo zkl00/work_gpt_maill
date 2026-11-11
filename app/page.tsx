@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { SHAREABLE_COLUMNS } from "@/lib/types";
 import type { AccountStatus, ChatGptPlan, ReminderState, SharedLink, SubscriptionInput, SubscriptionView } from "@/lib/types";
 
 type FormValues = SubscriptionInput;
@@ -112,6 +113,7 @@ export default function Home() {
   const [exporting, setExporting] = useState(false);
 
   // 分享功能状态
+  const defaultVisibleColumns = ["accountEmail", "serviceType", "chatGptPlan", "expiresOn", "expiryState", "status"];
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -119,6 +121,7 @@ export default function Home() {
   const [shareTitle, setShareTitle] = useState("");
   const [shareAllowEdit, setShareAllowEdit] = useState(false);
   const [shareAllowDelete, setShareAllowDelete] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>(defaultVisibleColumns);
   const [createdShareUrl, setCreatedShareUrl] = useState<string | null>(null);
   const [generatingShare, setGeneratingShare] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -193,11 +196,16 @@ export default function Home() {
     setShareTitle("");
     setShareAllowEdit(false);
     setShareAllowDelete(false);
+    setSelectedColumns(defaultVisibleColumns);
     setShareModalOpen(true);
   }
 
   async function handleCreateShare() {
     if (selectedIds.size === 0) return;
+    if (selectedColumns.length === 0) {
+      setError("请至少勾选一个对外展示的表头列。");
+      return;
+    }
     setGeneratingShare(true);
     setError(null);
     try {
@@ -208,6 +216,7 @@ export default function Home() {
           subscriptionIds: Array.from(selectedIds),
           allowEdit: shareAllowEdit,
           allowDelete: shareAllowDelete,
+          visibleColumns: selectedColumns,
           title: shareTitle,
         }),
       });
@@ -705,6 +714,51 @@ export default function Home() {
                 </small>
               </div>
 
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <label style={{ margin: 0, fontWeight: 700 }}>对外展示的表头列（未勾选的列将彻底隐藏）</label>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <button
+                      type="button"
+                      className="text-button"
+                      style={{ fontSize: "12px" }}
+                      onClick={() => setSelectedColumns(SHAREABLE_COLUMNS.map((c) => c.key))}
+                    >
+                      全部显示
+                    </button>
+                    <button
+                      type="button"
+                      className="text-button"
+                      style={{ fontSize: "12px" }}
+                      onClick={() => setSelectedColumns(defaultVisibleColumns)}
+                    >
+                      恢复默认
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid var(--line)" }}>
+                  {SHAREABLE_COLUMNS.map((col) => (
+                    <label key={col.key} className="checkbox-inline" style={{ fontSize: "13px" }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedColumns.includes(col.key)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedColumns((prev) => [...prev, col.key]);
+                          } else {
+                            setSelectedColumns((prev) => prev.filter((k) => k !== col.key));
+                          }
+                        }}
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <small style={{ display: "block", marginTop: "6px", color: "var(--muted)" }}>
+                  默认已隐藏“美区账号”、“接收邮箱”、“提醒规则”等内部字段。
+                </small>
+              </div>
+
               {createdShareUrl && (
                 <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "10px", border: "1px solid var(--line)" }}>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)" }}>✓ 分享链接已生成：</span>
@@ -762,7 +816,7 @@ export default function Home() {
                       <div className="share-list-info">
                         <strong>{link.title || `分享 (${link.subscriptionIds.length} 个账号)`}</strong>
                         <span className="share-list-meta">
-                          权限：{perms} · 账号数：{link.subscriptionIds.length} · {link.createdAt.slice(0, 10)}
+                          权限：{perms} · 展示 {link.visibleColumns?.length ?? 6} 列 · 账号数：{link.subscriptionIds.length} · {link.createdAt.slice(0, 10)}
                         </span>
                       </div>
                       <div style={{ display: "flex", gap: "8px" }}>

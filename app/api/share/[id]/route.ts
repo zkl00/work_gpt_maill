@@ -15,6 +15,24 @@ function toView(subscription: Subscription, timeZone: string | undefined): Subsc
   };
 }
 
+function toMaskedView(
+  subscription: Subscription,
+  visibleColumns: string[],
+  timeZone: string | undefined,
+): SubscriptionView {
+  const visible = new Set(visibleColumns);
+  const view = toView(subscription, timeZone);
+  return {
+    ...view,
+    ownerEmail: visible.has("ownerEmail") ? view.ownerEmail : "—",
+    notificationEmail: visible.has("notificationEmail") ? view.notificationEmail : "—",
+    reminderRule: visible.has("reminderRule")
+      ? view.reminderRule
+      : { enabled: false, daysBefore: 0, source: "manual" },
+    chatGptPlan: visible.has("chatGptPlan") ? view.chatGptPlan : undefined,
+  };
+}
+
 export async function GET(_request: Request, context: Context) {
   try {
     const env = await getAppEnv();
@@ -24,7 +42,9 @@ export async function GET(_request: Request, context: Context) {
       return NextResponse.json({ error: "分享链接不存在或已失效。" }, { status: 404 });
     }
 
-    const subscriptionsView = data.subscriptions.map((item) => toView(item, env.APP_TIME_ZONE));
+    const subscriptionsView = data.subscriptions.map((item) =>
+      toMaskedView(item, data.link.visibleColumns, env.APP_TIME_ZONE),
+    );
 
     return NextResponse.json({
       link: data.link,

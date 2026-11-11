@@ -12,11 +12,21 @@ import type {
   SubscriptionInput,
 } from "./types";
 
+export const DEFAULT_VISIBLE_COLUMNS: string[] = [
+  "accountEmail",
+  "serviceType",
+  "chatGptPlan",
+  "expiresOn",
+  "expiryState",
+  "status",
+];
+
 type SharedLinkRow = {
   id: string;
   subscription_ids: string;
   allow_edit: number;
   allow_delete: number;
+  visible_columns?: string | null;
   title: string;
   created_at: string;
   updated_at: string;
@@ -32,11 +42,19 @@ export async function ensureSharedLinksTable(database: D1Database): Promise<void
       subscription_ids TEXT NOT NULL,
       allow_edit INTEGER NOT NULL DEFAULT 0 CHECK (allow_edit IN (0, 1)),
       allow_delete INTEGER NOT NULL DEFAULT 0 CHECK (allow_delete IN (0, 1)),
+      visible_columns TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
   `).run();
+
+  try {
+    await database.prepare("ALTER TABLE shared_links ADD COLUMN visible_columns TEXT NOT NULL DEFAULT ''").run();
+  } catch {
+    // 字段已存在时忽略
+  }
+
   tableEnsured = true;
 }
 
@@ -48,11 +66,25 @@ function mapRow(row: SharedLinkRow): SharedLink {
   } catch {
     subscriptionIds = [];
   }
+
+  let visibleColumns = DEFAULT_VISIBLE_COLUMNS;
+  if (row.visible_columns) {
+    try {
+      const parsed = JSON.parse(row.visible_columns);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        visibleColumns = parsed;
+      }
+    } catch {
+      visibleColumns = DEFAULT_VISIBLE_COLUMNS;
+    }
+  }
+
   return {
     id: row.id,
     subscriptionIds,
     allowEdit: Boolean(row.allow_edit),
     allowDelete: Boolean(row.allow_delete),
+    visibleColumns,
     title: row.title || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -69,23 +101,27 @@ export async function createSharedLink(
   }
 
   const now = new Date().toISOString();
-  // 生成短而安全的随机 token，如 16 字符
   const id = randomUUID().replace(/-/g, "").slice(0, 16);
   const allowEdit = input.allowEdit ? 1 : 0;
   const allowDelete = input.allowDelete ? 1 : 0;
   const title = (input.title || "").trim();
   const subscriptionIdsJson = JSON.stringify(Array.from(new Set(input.subscriptionIds)));
+  const visibleColumns = input.visibleColumns && input.visibleColumns.length > 0
+    ? input.visibleColumns
+    : DEFAULT_VISIBLE_COLUMNS;
+  const visibleColumnsJson = JSON.stringify(visibleColumns);
 
   await database.prepare(`
-    INSERT INTO shared_links (id, subscription_ids, allow_edit, allow_delete, title, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(id, subscriptionIdsJson, allowEdit, allowDelete, title, now, now).run();
+    INSERT INTO shared_links (id, subscription_ids, allow_edit, allow_delete, visible_columns, title, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(id, subscriptionIdsJson, allowEdit, allowDelete, visibleColumnsJson, title, now, now).run();
 
   return {
     id,
     subscriptionIds: Array.from(new Set(input.subscriptionIds)),
     allowEdit: Boolean(allowEdit),
     allowDelete: Boolean(allowDelete),
+    visibleColumns,
     title,
     createdAt: now,
     updatedAt: now,
@@ -98,7 +134,7 @@ export async function getSharedLink(
 ): Promise<SharedLink | null> {
   await ensureSharedLinksTable(database);
   const row = await database.prepare(`
-    SELECT id, subscription_ids, allow_edit, allow_delete, title, created_at, updated_at
+    SELECT id, subscription_ids, allow_edit, allow_delete, visible_columns, title, created_at, updated_at
     FROM shared_links
     WHERE id = ?
   `).bind(id).first<SharedLinkRow>();
@@ -112,7 +148,7 @@ export async function listSharedLinks(
 ): Promise<SharedLink[]> {
   await ensureSharedLinksTable(database);
   const result = await database.prepare(`
-    SELECT id, subscription_ids, allow_edit, allow_delete, title, created_at, updated_at
+    SELECT id, subscription_ids, allow_edit, allow_delete, visible_columns, title, created_at, updated_at
     FROM shared_links
     ORDER BY created_at DESC
   `).all<SharedLinkRow>();
@@ -163,7 +199,27 @@ export async function updateSharedSubscription(
     throw new Error("无权修改未授权的账号。");
   }
 
-  return updateSubscription(database, subscriptionId, input, rule);
+  const all = await listSubscriptions(database);
+  const existing = all.find((item) => item.id === subscriptionId);
+  if (!existing) return null;
+
+  const visible = new Set(link.visibleColumns);
+  const safeInput: SubscriptionInput = {
+    ...input,
+    ownerEmail: visible.has("ownerEmail") ? input.ownerEmail : existing.ownerEmail,
+    accountEmail: visible.has("accountEmail") ? input.accountEmail : existing.accountEmail,
+    serviceType: visible.has("serviceType") ? input.serviceType : existing.serviceType,
+    chatGptPlan: visible.has("chatGptPlan") ? input.chatGptPlan : existing.chatGptPlan,
+    notificationEmail: visible.has("notificationEmail") ? input.notificationEmail : existing.notificationEmail,
+    activatedOn: input.activatedOn || existing.activatedOn,
+    expiresOn: visible.has("expiresOn") ? input.expiresOn : existing.expiresOn,
+    status: visible.has("status") ? input.status : existing.status,
+    notes: input.notes !== undefined ? input.notes : existing.notes,
+    cancelled: input.cancelled !== undefined ? input.cancelled : existing.cancelled,
+    reminderDays: visible.has("reminderRule") ? input.reminderDays : existing.reminderRule.daysBefore,
+  };
+
+  return updateSubscription(database, subscriptionId, safeInput, rule);
 }
 
 export async function deleteSharedSubscription(
@@ -178,10 +234,8 @@ export async function deleteSharedSubscription(
     throw new Error("无权删除未授权的账号。");
   }
 
-  // 1. 从主库删除账号
   const deleted = await deleteSubscription(database, subscriptionId);
 
-  // 2. 从该分享链接列表中移除此 subscriptionId
   const remainingIds = link.subscriptionIds.filter((id) => id !== subscriptionId);
   await database.prepare(`
     UPDATE shared_links SET subscription_ids = ?, updated_at = ? WHERE id = ?
@@ -189,4 +243,3 @@ export async function deleteSharedSubscription(
 
   return deleted;
 }
-

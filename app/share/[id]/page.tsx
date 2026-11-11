@@ -166,6 +166,8 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
   }
 
   const hasOperations = link && (link.allowEdit || link.allowDelete);
+  const isColVisible = (colKey: string) => !link || link.visibleColumns.includes(colKey);
+  const totalCols = (link ? link.visibleColumns.length : 6) + (hasOperations ? 1 : 0);
 
   return (
     <main>
@@ -211,17 +213,31 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           <form onSubmit={submitEdit} className="form-grid">
-            <label>美区账号邮箱<input required type="email" value={form.ownerEmail} onChange={(event) => change("ownerEmail", event.target.value)} /></label>
-            <label>账号邮箱<input required type="email" value={form.accountEmail} onChange={(event) => change("accountEmail", event.target.value)} /></label>
-            <label>接收邮箱（可多个）<input required type="text" value={form.notificationEmail} onChange={(event) => change("notificationEmail", event.target.value)} /></label>
-            <label>类型<select required value={form.serviceType} onChange={(event) => changeServiceType(event.target.value)}><option value="chatgpt">ChatGPT</option><option value="apple">Apple</option><option value="anzhuo">安卓</option><option value="other">其他</option></select></label>
-            {form.serviceType === "chatgpt" && (
+            {isColVisible("ownerEmail") && (
+              <label>美区账号邮箱<input required type="email" value={form.ownerEmail} onChange={(event) => change("ownerEmail", event.target.value)} /></label>
+            )}
+            {isColVisible("accountEmail") && (
+              <label>账号邮箱<input required type="email" value={form.accountEmail} onChange={(event) => change("accountEmail", event.target.value)} /></label>
+            )}
+            {isColVisible("notificationEmail") && (
+              <label>接收邮箱（可多个）<input required type="text" value={form.notificationEmail} onChange={(event) => change("notificationEmail", event.target.value)} /></label>
+            )}
+            {isColVisible("serviceType") && (
+              <label>类型<select required value={form.serviceType} onChange={(event) => changeServiceType(event.target.value)}><option value="chatgpt">ChatGPT</option><option value="apple">Apple</option><option value="anzhuo">安卓</option><option value="other">其他</option></select></label>
+            )}
+            {isColVisible("chatGptPlan") && form.serviceType === "chatgpt" && (
               <label>ChatGPT 套餐<select required value={form.chatGptPlan || ""} onChange={(event) => change("chatGptPlan", event.target.value as ChatGptPlan)}><option value="plus">Plus</option><option value="pro10">Pro 10</option><option value="pro20">Pro 20</option><option value="pro500">Pro 500</option></select></label>
             )}
             <label>开通时间<input required type="date" value={form.activatedOn} onChange={(event) => change("activatedOn", event.target.value)} /></label>
-            <label>到期时间<input required type="date" value={form.expiresOn} onChange={(event) => change("expiresOn", event.target.value)} /></label>
-            <label>状态<select value={form.status} onChange={(event) => change("status", event.target.value as AccountStatus)}><option value="active">已续费 / 正常</option><option value="paused">暂停</option><option value="expired">已到期</option></select></label>
-            <label>默认提前提醒<select value={form.reminderDays} onChange={(event) => change("reminderDays", Number(event.target.value))}><option value={0}>到期当天</option><option value={1}>提前 1 天</option><option value={3}>提前 3 天</option><option value={7}>提前 7 天</option><option value={14}>提前 14 天</option><option value={30}>提前 30 天</option></select></label>
+            {isColVisible("expiresOn") && (
+              <label>到期时间<input required type="date" value={form.expiresOn} onChange={(event) => change("expiresOn", event.target.value)} /></label>
+            )}
+            {isColVisible("status") && (
+              <label>状态<select value={form.status} onChange={(event) => change("status", event.target.value as AccountStatus)}><option value="active">已续费 / 正常</option><option value="paused">暂停</option><option value="expired">已到期</option></select></label>
+            )}
+            {isColVisible("reminderRule") && (
+              <label>默认提前提醒<select value={form.reminderDays} onChange={(event) => change("reminderDays", Number(event.target.value))}><option value={0}>到期当天</option><option value={1}>提前 1 天</option><option value={3}>提前 3 天</option><option value={7}>提前 7 天</option><option value={14}>提前 14 天</option><option value={30}>提前 30 天</option></select></label>
+            )}
             <label>订阅状态<select value={form.cancelled ? "cancelled" : "active"} onChange={(event) => change("cancelled", event.target.value === "cancelled")}><option value="active">正常订阅（发送提醒）</option><option value="cancelled">已取消订阅（不发送提醒）</option></select></label>
             <label className="wide">备注<textarea value={form.notes} onChange={(event) => change("notes", event.target.value)} rows={3} /></label>
             <div className="wide form-actions">
@@ -248,34 +264,34 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
           <table>
             <thead>
               <tr>
-                <th>美区账号</th>
-                <th>账号</th>
-                <th>类型</th>
-                <th>套餐</th>
-                <th>到期时间</th>
-                <th>到期状态</th>
-                <th>接收邮箱</th>
-                <th>提醒规则</th>
-                <th>状态</th>
+                {isColVisible("ownerEmail") && <th>美区账号</th>}
+                {isColVisible("accountEmail") && <th>账号</th>}
+                {isColVisible("serviceType") && <th>类型</th>}
+                {isColVisible("chatGptPlan") && <th>套餐</th>}
+                {isColVisible("expiresOn") && <th>到期时间</th>}
+                {isColVisible("expiryState") && <th>到期状态</th>}
+                {isColVisible("notificationEmail") && <th>接收邮箱</th>}
+                {isColVisible("reminderRule") && <th>提醒规则</th>}
+                {isColVisible("status") && <th>状态</th>}
                 {hasOperations && <th>操作</th>}
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={hasOperations ? 10 : 9} className="empty">加载中…</td></tr>}
+              {loading && <tr><td colSpan={totalCols} className="empty">加载中…</td></tr>}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={hasOperations ? 10 : 9} className="empty">暂无分享的账号数据。</td></tr>
+                <tr><td colSpan={totalCols} className="empty">暂无分享的账号数据。</td></tr>
               )}
               {!loading && rows.map((subscription) => (
                 <tr key={subscription.id} className={subscription.expiryState === "imminent" ? "imminent-row" : undefined}>
-                  <td>{subscription.ownerEmail}</td>
-                  <td>{subscription.accountEmail}</td>
-                  <td>{serviceTypeNames[subscription.serviceType] || subscription.serviceType}</td>
-                  <td>{subscription.chatGptPlan ? planNames[subscription.chatGptPlan] : <span className="expiry-normal">—</span>}</td>
-                  <td>{subscription.expiresOn}</td>
-                  <td>{subscription.expiryState === "imminent" ? <span className="badge imminent">⚠ 马上到期</span> : <span className="expiry-normal">—</span>}</td>
-                  <td className="recipient-list">{subscription.notificationEmail.split(/,\s*/).map((email) => <span key={email}>{email}</span>)}</td>
-                  <td><span>{subscription.reminderRule.enabled ? `提前 ${subscription.reminderRule.daysBefore} 天` : "不发送"}</span></td>
-                  <td><span className={`badge ${subscription.reminderState}`}>{stateText[subscription.reminderState]}</span></td>
+                  {isColVisible("ownerEmail") && <td>{subscription.ownerEmail}</td>}
+                  {isColVisible("accountEmail") && <td>{subscription.accountEmail}</td>}
+                  {isColVisible("serviceType") && <td>{serviceTypeNames[subscription.serviceType] || subscription.serviceType}</td>}
+                  {isColVisible("chatGptPlan") && <td>{subscription.chatGptPlan ? planNames[subscription.chatGptPlan] : <span className="expiry-normal">—</span>}</td>}
+                  {isColVisible("expiresOn") && <td>{subscription.expiresOn}</td>}
+                  {isColVisible("expiryState") && <td>{subscription.expiryState === "imminent" ? <span className="badge imminent">⚠ 马上到期</span> : <span className="expiry-normal">—</span>}</td>}
+                  {isColVisible("notificationEmail") && <td className="recipient-list">{subscription.notificationEmail.split(/,\s*/).map((email) => <span key={email}>{email}</span>)}</td>}
+                  {isColVisible("reminderRule") && <td><span>{subscription.reminderRule.enabled ? `提前 ${subscription.reminderRule.daysBefore} 天` : "不发送"}</span></td>}
+                  {isColVisible("status") && <td><span className={`badge ${subscription.reminderState}`}>{stateText[subscription.reminderState]}</span></td>}
                   {hasOperations && (
                     <td>
                       <div className="row-actions">

@@ -57,11 +57,26 @@ export type SubscriptionView = Subscription & {
   nextSendOn: string | null;
 };
 
+export const SHAREABLE_COLUMNS = [
+  { key: "ownerEmail", label: "美区账号" },
+  { key: "accountEmail", label: "账号" },
+  { key: "serviceType", label: "类型" },
+  { key: "chatGptPlan", label: "套餐" },
+  { key: "expiresOn", label: "到期时间" },
+  { key: "expiryState", label: "到期状态" },
+  { key: "notificationEmail", label: "接收邮箱" },
+  { key: "reminderRule", label: "提醒规则" },
+  { key: "status", label: "状态" },
+] as const;
+
+export type ShareableColumnKey = (typeof SHAREABLE_COLUMNS)[number]["key"];
+
 export type SharedLink = {
   id: string;
   subscriptionIds: string[];
   allowEdit: boolean;
   allowDelete: boolean;
+  visibleColumns: string[];
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -71,6 +86,7 @@ export type CreateSharedLinkInput = {
   subscriptionIds: string[];
   allowEdit?: boolean;
   allowDelete?: boolean;
+  visibleColumns?: string[];
   title?: string;
 };
 
