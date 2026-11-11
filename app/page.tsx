@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { AccountStatus, ChatGptPlan, ReminderState, SubscriptionInput, SubscriptionView } from "@/lib/types";
+import type { AccountStatus, ChatGptPlan, ReminderState, SharedLink, SubscriptionInput, SubscriptionView } from "@/lib/types";
 
 type FormValues = SubscriptionInput;
 
@@ -111,6 +111,18 @@ export default function Home() {
   const [committingImport, setCommittingImport] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // 分享功能状态
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [manageSharesOpen, setManageSharesOpen] = useState(false);
+  const [shareTitle, setShareTitle] = useState("");
+  const [shareAllowEdit, setShareAllowEdit] = useState(false);
+  const [shareAllowDelete, setShareAllowDelete] = useState(false);
+  const [createdShareUrl, setCreatedShareUrl] = useState<string | null>(null);
+  const [generatingShare, setGeneratingShare] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   const dueCount = useMemo(
     () => rows.filter((item) => item.reminderState === "due").length,
     [rows],
@@ -141,9 +153,99 @@ export default function Home() {
     }
   }
 
+  async function loadSharedLinks() {
+    try {
+      const response = await fetch("/api/share", { cache: "no-store" });
+      if (response.ok) {
+        setSharedLinks((await response.json()) as SharedLink[]);
+      }
+    } catch {
+      // 忽略分享列表加载异常
+    }
+  }
+
+  const allSelected = rows.length > 0 && selectedIds.size === rows.length;
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(rows.map((item) => item.id)));
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function openShareModal() {
+    if (selectedIds.size === 0) {
+      setError("请先在账号列表中勾选要分享的账号。");
+      return;
+    }
+    setError(null);
+    setCreatedShareUrl(null);
+    setShareTitle("");
+    setShareAllowEdit(false);
+    setShareAllowDelete(false);
+    setShareModalOpen(true);
+  }
+
+  async function handleCreateShare() {
+    if (selectedIds.size === 0) return;
+    setGeneratingShare(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscriptionIds: Array.from(selectedIds),
+          allowEdit: shareAllowEdit,
+          allowDelete: shareAllowDelete,
+          title: shareTitle,
+        }),
+      });
+      if (!response.ok) throw new Error(await readApiError(response));
+      const created = (await response.json()) as SharedLink;
+      setSharedLinks((current) => [created, ...current]);
+      const fullUrl = `${window.location.origin}/share/${created.id}`;
+      setCreatedShareUrl(fullUrl);
+      setNotice("分享链接已成功生成！");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成分享链接失败。");
+    } finally {
+      setGeneratingShare(false);
+    }
+  }
+
+  async function handleDeleteShare(id: string) {
+    if (!window.confirm("确定撤销/删除该分享链接吗？撤销后被分享人将无法再访问。")) return;
+    try {
+      const response = await fetch(`/api/share/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await readApiError(response));
+      setSharedLinks((current) => current.filter((item) => item.id !== id));
+      setNotice("已成功撤销该分享链接。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "删除失败。");
+    }
+  }
+
+  async function copyText(text: string) {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   useEffect(() => {
     void loadRows();
     void loadEmailConfig();
+    void loadSharedLinks();
     if (!("Notification" in window)) {
       setDesktopPermission("unsupported");
       return;
@@ -490,17 +592,61 @@ export default function Home() {
       <section className="panel table-panel">
         <div className="section-heading">
           <div><h2>账号列表</h2><p>到期日 3 天内的未取消记录会标记为“马上到期”并自动置顶。</p></div>
-          <div className="table-controls"><button className="button ghost" type="button" disabled={exporting} onClick={() => void exportSubscriptions()}>{exporting ? "导出中…" : "导出 Excel"}</button><button className="button ghost" type="button" onClick={() => void loadRows()}>刷新</button></div>
+          <div className="table-controls">
+            <button className="button primary" type="button" onClick={openShareModal}>
+              🔗 分享选中项{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+            </button>
+            <button className="button ghost" type="button" onClick={() => setManageSharesOpen(true)}>
+              管理分享{sharedLinks.length > 0 ? ` (${sharedLinks.length})` : ""}
+            </button>
+            <button className="button ghost" type="button" disabled={exporting} onClick={() => void exportSubscriptions()}>{exporting ? "导出中…" : "导出 Excel"}</button>
+            <button className="button ghost" type="button" onClick={() => void loadRows()}>刷新</button>
+          </div>
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>美区账号</th><th>账号</th><th>类型</th><th>套餐</th><th>到期时间</th><th>到期状态</th><th>接收邮箱</th><th>提醒规则</th><th>状态</th><th>操作</th></tr></thead>
+            <thead>
+              <tr>
+                <th className="checkbox-col">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    title="全选 / 取消全选"
+                  />
+                </th>
+                <th>美区账号</th>
+                <th>账号</th>
+                <th>类型</th>
+                <th>套餐</th>
+                <th>到期时间</th>
+                <th>到期状态</th>
+                <th>接收邮箱</th>
+                <th>提醒规则</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
             <tbody>
-              {loading && <tr><td colSpan={10} className="empty">加载中…</td></tr>}
-              {!loading && rows.length === 0 && <tr><td colSpan={10} className="empty">还没有账号。填写上方表单后开始管理提醒。</td></tr>}
+              {loading && <tr><td colSpan={11} className="empty">加载中…</td></tr>}
+              {!loading && rows.length === 0 && <tr><td colSpan={11} className="empty">还没有账号。填写上方表单后开始管理提醒。</td></tr>}
               {!loading && rows.map((subscription) => (
                 <tr key={subscription.id} className={subscription.expiryState === "imminent" ? "imminent-row" : undefined}>
-                  <td>{subscription.ownerEmail}</td><td>{subscription.accountEmail}</td><td>{serviceTypeNames[subscription.serviceType] || subscription.serviceType}</td><td>{subscription.chatGptPlan ? planNames[subscription.chatGptPlan] : <span className="expiry-normal">—</span>}</td><td>{subscription.expiresOn}</td><td>{subscription.expiryState === "imminent" ? <span className="badge imminent">⚠ 马上到期</span> : <span className="expiry-normal">—</span>}</td><td className="recipient-list">{subscription.notificationEmail.split(/,\s*/).map((email) => <span key={email}>{email}</span>)}</td>
+                  <td className="checkbox-col">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(subscription.id)}
+                      onChange={() => toggleSelect(subscription.id)}
+                      title={`勾选 ${subscription.accountEmail} 进行分享`}
+                    />
+                  </td>
+                  <td>{subscription.ownerEmail}</td>
+                  <td>{subscription.accountEmail}</td>
+                  <td>{serviceTypeNames[subscription.serviceType] || subscription.serviceType}</td>
+                  <td>{subscription.chatGptPlan ? planNames[subscription.chatGptPlan] : <span className="expiry-normal">—</span>}</td>
+                  <td>{subscription.expiresOn}</td>
+                  <td>{subscription.expiryState === "imminent" ? <span className="badge imminent">⚠ 马上到期</span> : <span className="expiry-normal">—</span>}</td>
+                  <td className="recipient-list">{subscription.notificationEmail.split(/,\s*/).map((email) => <span key={email}>{email}</span>)}</td>
                   <td><span>{subscription.reminderRule.enabled ? `提前 ${subscription.reminderRule.daysBefore} 天` : "不发送"}</span><small>{subscription.reminderRule.source === "typesafe" ? "TypeSafe 已解读备注" : subscription.nextSendOn ? `发送日 ${subscription.nextSendOn}` : "—"}</small></td>
                   <td><span className={`badge ${subscription.reminderState}`}>{stateText[subscription.reminderState]}</span></td>
                   <td><div className="row-actions"><button className="text-button" type="button" onClick={() => edit(subscription)}>编辑</button>{subscription.cancelled ? <button className="text-button" type="button" disabled={restoringId === subscription.id} onClick={() => void restoreReminder(subscription)}>{restoringId === subscription.id ? "恢复中…" : "恢复提醒"}</button> : <button className="text-button" type="button" disabled={sendingId === subscription.id || !subscription.reminderRule.enabled} onClick={() => void sendNow(subscription)}>{sendingId === subscription.id ? "发送中…" : "立即测试"}</button>}<button className="text-button danger" type="button" disabled={deletingId === subscription.id} onClick={() => void deleteSubscription(subscription)}>{deletingId === subscription.id ? "删除中…" : "删除"}</button></div></td>
@@ -510,6 +656,137 @@ export default function Home() {
           </table>
         </div>
       </section>
+
+      {/* 创建分享模态框 */}
+      {shareModalOpen && (
+        <div className="modal-overlay" onClick={() => setShareModalOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>生成专属分享链接</h3>
+              <button className="text-button" type="button" onClick={() => setShareModalOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: 0, color: "var(--muted)", fontSize: "13.5px" }}>
+                已选择 <strong>{selectedIds.size}</strong> 个账号进行分享。被分享人只能访问这些勾选的账号。
+              </p>
+
+              <label style={{ display: "block" }}>
+                分享说明 / 标题（选填）
+                <input
+                  type="text"
+                  placeholder="例如：给团队小李查看的账号"
+                  value={shareTitle}
+                  onChange={(e) => setShareTitle(e.target.value)}
+                />
+              </label>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "8px" }}>分享人权限设置</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <label className="checkbox-inline">
+                    <input
+                      type="checkbox"
+                      checked={shareAllowEdit}
+                      onChange={(e) => setShareAllowEdit(e.target.checked)}
+                    />
+                    <span>允许修改账号信息（更改）</span>
+                  </label>
+                  <label className="checkbox-inline">
+                    <input
+                      type="checkbox"
+                      checked={shareAllowDelete}
+                      onChange={(e) => setShareAllowDelete(e.target.checked)}
+                    />
+                    <span>允许删除账号（删除）</span>
+                  </label>
+                </div>
+                <small style={{ display: "block", marginTop: "6px", color: "var(--muted)" }}>
+                  未勾选时默认仅为只读查看权限，无法修改或删除数据。
+                </small>
+              </div>
+
+              {createdShareUrl && (
+                <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "10px", border: "1px solid var(--line)" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)" }}>✓ 分享链接已生成：</span>
+                  <div className="share-link-box">
+                    <input readOnly value={createdShareUrl} />
+                    <button className="button primary" type="button" onClick={() => void copyText(createdShareUrl)}>
+                      {copied ? "已复制" : "复制"}
+                    </button>
+                  </div>
+                  <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
+                    <a href={createdShareUrl} target="_blank" rel="noreferrer" className="text-button" style={{ fontSize: "13px" }}>
+                      在新标签页中打开预览 ↗
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              {!createdShareUrl ? (
+                <>
+                  <button className="button ghost" type="button" onClick={() => setShareModalOpen(false)}>取消</button>
+                  <button className="button primary" type="button" disabled={generatingShare} onClick={() => void handleCreateShare()}>
+                    {generatingShare ? "生成中…" : "立即生成分享链接"}
+                  </button>
+                </>
+              ) : (
+                <button className="button primary" type="button" onClick={() => setShareModalOpen(false)}>完成</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 管理分享模态框 */}
+      {manageSharesOpen && (
+        <div className="modal-overlay" onClick={() => setManageSharesOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>管理已生成的分享链接</h3>
+              <button className="text-button" type="button" onClick={() => setManageSharesOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {sharedLinks.length === 0 ? (
+                <p style={{ textAlign: "center", color: "var(--muted)", padding: "20px 0" }}>暂无活跃的分享链接。</p>
+              ) : (
+                sharedLinks.map((link) => {
+                  const url = typeof window !== "undefined" ? `${window.location.origin}/share/${link.id}` : `/share/${link.id}`;
+                  const perms = [
+                    link.allowEdit ? "允许更改" : null,
+                    link.allowDelete ? "允许删除" : null,
+                  ].filter(Boolean).join("、") || "只读查看";
+
+                  return (
+                    <div key={link.id} className="share-list-item">
+                      <div className="share-list-info">
+                        <strong>{link.title || `分享 (${link.subscriptionIds.length} 个账号)`}</strong>
+                        <span className="share-list-meta">
+                          权限：{perms} · 账号数：{link.subscriptionIds.length} · {link.createdAt.slice(0, 10)}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button className="text-button" type="button" onClick={() => void copyText(url)}>
+                          复制链接
+                        </button>
+                        <a href={url} target="_blank" rel="noreferrer" className="text-button">
+                          预览
+                        </a>
+                        <button className="text-button danger" type="button" onClick={() => void handleDeleteShare(link.id)}>
+                          撤销
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="button ghost" type="button" onClick={() => setManageSharesOpen(false)}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer>Cloudflare Cron 每天 09:00（Asia/Shanghai）检查一次。页面保存 Resend 配置前，请在 Cloudflare 设置 <code>EMAIL_CONFIG_ENCRYPTION_KEY</code>。</footer>
     </main>

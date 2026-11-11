@@ -56,3 +56,25 @@ export type SubscriptionView = Subscription & {
   expiryState: ExpiryState;
   nextSendOn: string | null;
 };
+
+export type SharedLink = {
+  id: string;
+  subscriptionIds: string[];
+  allowEdit: boolean;
+  allowDelete: boolean;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateSharedLinkInput = {
+  subscriptionIds: string[];
+  allowEdit?: boolean;
+  allowDelete?: boolean;
+  title?: string;
+};
+
+export type SharedViewData = {
+  link: SharedLink;
+  subscriptions: SubscriptionView[];
+};
