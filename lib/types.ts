@@ -1,5 +1,5 @@
 export type AccountStatus = "active" | "expired" | "paused";
-export type ChatGptPlan = "plus" | "pro10" | "pro20";
+export type ChatGptPlan = "plus" | "pro10" | "pro20" | "pro500";
 
 export type ReminderSource = "manual" | "typesafe" | "fallback";
 

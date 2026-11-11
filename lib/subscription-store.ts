@@ -6,7 +6,7 @@ import type { ChatGptPlan, ReminderRule, SentReminder, Subscription, Subscriptio
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const validStatuses = new Set(["active", "expired", "paused"]);
 const validServiceTypes = new Set(["chatgpt", "apple", "anzhuo", "other"]);
-const validChatGptPlans = new Set<ChatGptPlan>(["plus", "pro10", "pro20"]);
+const validChatGptPlans = new Set<ChatGptPlan>(["plus", "pro10", "pro20", "pro500"]);
 
 type SubscriptionRow = {
   id: string;

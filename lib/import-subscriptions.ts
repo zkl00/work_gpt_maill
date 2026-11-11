@@ -57,6 +57,7 @@ function normalisePlan(value: unknown): ChatGptPlan | undefined {
   if (normalized === "plus" || normalized === "plust") return "plus";
   if (normalized === "pro10") return "pro10";
   if (normalized === "pro20") return "pro20";
+  if (normalized === "pro500") return "pro500";
   return undefined;
 }
 

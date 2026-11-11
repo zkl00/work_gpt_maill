@@ -36,4 +36,13 @@ describe("subscription spreadsheet export", () => {
       "预计发送日": "2026-09-30",
     });
   });
+
+  it("exports pro500 as Pro 500", () => {
+    const workbook = XLSX.read(exportSubscriptionsWorkbook([{ ...subscription, chatGptPlan: "pro500" }]), { type: "buffer" });
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["账号到期提醒"]);
+
+    expect(rows[0]).toMatchObject({
+      "套餐": "Pro 500",
+    });
+  });
 });
